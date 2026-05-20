@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}Users{% endblock %}
+{% block page_title %}👥 User Management{% endblock %}
+{% block topbar_actions %}
+{% if 'users.create' in perms %}
+<button class="btn btn-primary" onclick="openModal('newUserModal')">➕ Add User</button>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+
+<!-- Role Legend -->
+<div class="card mb-16">
+  <div class="card-title mb-12">🔐 Role Overview</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">
+    <div style="padding:12px 14px;border-radius:8px;border:1px solid rgba(139,92,246,.3);background:rgba(139,92,246,.06)">
+      <span class="badge badge-purple mb-8" style="display:inline-block">Admin</span>
+      <div class="text-xs text-muted" style="line-height:1.6">Full access — users, settings, all data, all analysis</div>
+    </div>
+    <div style="padding:12px 14px;border-radius:8px;border:1px solid rgba(59,130,246,.3);background:rgba(59,130,246,.06)">
+      <span class="badge badge-blue mb-8" style="display:inline-block">Manager</span>
+      <div class="text-xs text-muted" style="line-height:1.6">Full operations — no user management</div>
+    </div>
+    <div style="padding:12px 14px;border-radius:8px;border:1px solid rgba(16,185,129,.3);background:rgba(16,185,129,.06)">
+      <span class="badge badge-green mb-8" style="display:inline-block">Engineer</span>
+      <div class="text-xs text-muted" style="line-height:1.6">Analysis + AI + Reports + Upload + Jobs create</div>
+    </div>
+    <div style="padding:12px 14px;border-radius:8px;border:1px solid rgba(6,182,212,.3);background:rgba(6,182,212,.06)">
+      <span class="badge badge-cyan mb-8" style="display:inline-block">Field Operator</span>
+      <div class="text-xs text-muted" style="line-height:1.6">Upload MTT + SCADA + View jobs + Analysis view</div>
+    </div>
+  </div>
+</div>
+
+<!-- Users Table -->
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">All Users ({{ users|length }})</div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Username</th>
+          <th>Full Name</th>
+          <th>Email</th>
+          <th>Role</th>
+          <th>Status</th>
+          <th>Created</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td class="mono fw-bold">{{ u.username }}</td>
+          <td style="font-weight:500">{{ u.full_name or '—' }}</td>
+          <td class="text-muted text-xs">{{ u.email or '—' }}</td>
+          <td>
+            <span class="badge
+              {% if u.role == 'Admin' %}badge-purple
+              {% elif u.role == 'Manager' %}badge-blue
+              {% elif u.role == 'Engineer' %}badge-green
+              {% else %}badge-cyan{% endif %}">
+              {{ u.role }}
+            </span>
+          </td>
+          <td>
+            <span class="badge {{ 'badge-green' if u.is_active else 'badge-red' }}">
+              {{ 'Active' if u.is_active else 'Inactive' }}
+            </span>
+          </td>
+          <td class="text-muted text-xs">{{ u.created_at[:10] }}</td>
+          <td>
+            {% if 'users.edit' in perms and u.username != 'admin' %}
+            <form method="post" action="/users/{{ u.id }}/toggle" style="display:inline">
+              <button type="submit" class="btn btn-ghost btn-sm">
+                {{ 'Disable' if u.is_active else 'Enable' }}
+              </button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" style="text-align:center;padding:36px;color:var(--text3)">No users found</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Create User Modal -->
+{% if 'users.create' in perms %}
+<div class="modal-overlay" id="newUserModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">➕ Create New User</div>
+      <button class="modal-close" onclick="closeModal('newUserModal')">×</button>
+    </div>
+    <form method="post" action="/users/create">
+      <div class="modal-body">
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Username *</label>
+            <input type="text" name="username" class="form-control" placeholder="e.g. john.doe" required autofocus>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Full Name</label>
+            <input type="text" name="full_name" class="form-control" placeholder="John Doe">
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input type="email" name="email" class="form-control" placeholder="user@company.com">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Role</label>
+            <select name="role" class="form-control">
+              {% for r in roles %}
+              <option value="{{ r }}">{{ r }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password *</label>
+          <input type="password" name="password" class="form-control" placeholder="Min 8 characters" required>
+        </div>
+
+        <!-- Role description hint -->
+        <div style="padding:10px 12px;border-radius:8px;background:var(--bg3);border:1px solid var(--border)">
+          <div class="text-xs text-muted" style="line-height:1.7">
+            <strong style="color:var(--text2)">Role Permissions:</strong><br>
+            🟣 <strong>Admin</strong> — Everything<br>
+            🔵 <strong>Manager</strong> — Operations (no user mgmt)<br>
+            🟢 <strong>Engineer</strong> — Analysis + AI + Reports + Upload<br>
+            🔵 <strong>Field Operator</strong> — Upload MTT + SCADA + View
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('newUserModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create User</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

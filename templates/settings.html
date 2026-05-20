@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block page_title %}⚙️ Settings{% endblock %}
+
+{% block content %}
+<div class="grid-2 mb-16" style="align-items:start">
+
+  <!-- Platform Stats -->
+  <div class="card">
+    <div class="card-title mb-16">📊 Platform Statistics</div>
+    <div style="display:flex;flex-direction:column">
+      {% for label, val in [
+        ('Total Jobs',            stats.jobs),
+        ('Total Joints Analyzed', stats.joints),
+        ('Total Devices',         stats.devices),
+        ('Total Users',           stats.users),
+        ('Data Files Uploaded',   stats.files)
+      ] %}
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid var(--border)">
+        <span class="text-muted">{{ label }}</span>
+        <span class="mono fw-bold text-accent">{{ "{:,}".format(val|int) }}</span>
+      </div>
+      {% endfor %}
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:11px 0">
+        <span class="text-muted">Database Path</span>
+        <span class="mono text-xs" style="word-break:break-all;max-width:220px;text-align:right;color:var(--text3)">{{ stats.db_path }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:16px">
+
+    <!-- Permissions Matrix -->
+    <div class="card">
+      <div class="card-title mb-14">🔐 Role Permissions Matrix</div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr>
+              <th style="text-align:left;padding:7px 10px;color:var(--text3);font-size:11px;border-bottom:1px solid var(--border)">Feature</th>
+              {% for role, color in [('Admin','#8b5cf6'),('Manager','#3b82f6'),('Engineer','#10b981'),('Field Op.','#06b6d4')] %}
+              <th style="padding:7px 6px;text-align:center;font-size:11px;color:{{ color }};border-bottom:1px solid var(--border);white-space:nowrap">{{ role }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for feature, roles in [
+              ('Dashboard',       ['Admin','Manager','Engineer','Field Operator']),
+              ('Jobs — View',     ['Admin','Manager','Engineer','Field Operator']),
+              ('Jobs — Create',   ['Admin','Manager','Engineer']),
+              ('MTT Upload',      ['Admin','Manager','Engineer','Field Operator']),
+              ('Analysis View',   ['Admin','Manager','Engineer','Field Operator']),
+              ('Fleet View',      ['Admin','Manager','Engineer','Field Operator']),
+              ('AI Insights',     ['Admin','Manager','Engineer']),
+              ('Reports PDF',     ['Admin','Manager','Engineer']),
+              ('SCADA Live',      ['Admin','Manager','Engineer','Field Operator']),
+              ('Devices — Edit',  ['Admin','Manager']),
+              ('Users Mgmt',      ['Admin']),
+              ('Settings',        ['Admin','Manager']),
+            ] %}
+            <tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:8px 10px;font-size:12.5px;color:var(--text2)">{{ feature }}</td>
+              {% for r in ['Admin','Manager','Engineer','Field Operator'] %}
+              <td style="padding:8px 6px;text-align:center;font-size:13px">
+                {{ '✅' if r in roles else '<span style="color:var(--text3)">—</span>' }}
+              </td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Platform Info -->
+    <div class="card">
+      <div class="card-title mb-12">ℹ️ Platform Info</div>
+      <div style="display:flex;flex-direction:column;gap:10px;font-size:13px">
+        {% for label, val in [
+          ('Platform', 'TRS Platform'),
+          ('Version',  '1.0.0'),
+          ('Stack',    'FastAPI + SQLite + Jinja2'),
+          ('Purpose',  'MTT Torque-Turn Analysis'),
+          ('Roles',    '4 (Admin, Manager, Engineer, Field Operator)'),
+        ] %}
+        <div style="display:flex;gap:12px;align-items:flex-start">
+          <span class="text-muted" style="min-width:80px">{{ label }}</span>
+          <span style="font-weight:500">{{ val }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

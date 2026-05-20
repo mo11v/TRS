@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% block title %}AI Insights{% endblock %}
+{% block page_title %}🤖 AI Insights{% endblock %}
+{% block content %}
+<div class="grid-2 mb-16" style="align-items:start">
+  <!-- Job Selector -->
+  <div class="card">
+    <div class="card-title mb-16">🗂️ Select Job</div>
+    <div style="display:flex;flex-direction:column;gap:6px;max-height:420px;overflow-y:auto">
+      {% for j in all_jobs %}
+      <a href="/ai?job_id={{ j.id }}"
+         style="padding:10px 12px;border-radius:8px;text-decoration:none;border:1px solid {{ 'var(--accent)' if selected_job_id==j.id else 'var(--border)' }};background:{{ 'rgba(20,184,166,.08)' if selected_job_id==j.id else 'var(--card)' }};display:block;transition:all .15s">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="mono text-accent fw-bold">{{ j.job_number }}</span>
+          {% if j.total_joints %}<span class="badge badge-cyan">{{ j.total_joints }}j</span>{% endif %}
+        </div>
+        <div class="text-muted text-xs mt-4">{{ j.customer or '—' }}{% if j.ft_mean %} · FT {{ "%.0f"|format(j.ft_mean) }}{% endif %}{% if j.rerun_rate is not none %} · Rerun {{ "%.1f"|format(j.rerun_rate) }}%{% endif %}</div>
+      </a>
+      {% else %}
+      <div class="text-muted text-sm" style="padding:16px;text-align:center">No jobs with MTT data</div>
+      {% endfor %}
+    </div>
+
+    <!-- Fleet AI Summary -->
+    {% if fleet_ai %}
+    <div class="divider"></div>
+    <div class="card-title mb-12">🏆 Fleet AI Rankings</div>
+    {% for f in fleet_ai[:5] %}
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="width:32px;text-align:center;font-weight:800;font-family:'JetBrains Mono',monospace;font-size:13px;color:{{ '#14b8a6' if loop.index==1 else '#94a3b8' }}">
+        #{{ loop.index }}
+      </div>
+      <div style="flex:1">
+        <div style="font-size:12.5px;font-weight:600" class="mono text-accent">{{ f.job_number }}</div>
+        <div class="text-muted text-xs">{{ f.customer or '' }}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:14px;font-weight:800;color:{{ '#10b981' if f.performance_score>=80 else '#14b8a6' if f.performance_score>=60 else '#ef4444' }};font-family:'JetBrains Mono',monospace">
+          {{ f.performance_score|int }}
+        </div>
+        <div class="text-xs text-muted">score</div>
+      </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+  </div>
+
+  <!-- AI Results Panel -->
+  {% if selected_job %}
+  <div style="display:flex;flex-direction:column;gap:16px">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">🤖 AI Analysis — {{ selected_job.job_number }}</div>
+        {% if 'ai.run' in perms %}
+        <button class="btn btn-primary btn-sm" onclick="runAI({{ selected_job.id }})">▶ Run Analysis</button>
+        {% endif %}
+      </div>
+
+      {% if ai_saved %}
+      <!-- Scores -->
+      <div style="display:flex;gap:20px;align-items:center;margin-bottom:16px">
+        <div style="text-align:center">
+          <div class="score-ring"
+               style="border-color:{{ '#10b981' if ai_saved.performance_score>=80 else '#14b8a6' if ai_saved.performance_score>=60 else '#ef4444' }};
+                      color:{{ '#10b981' if ai_saved.performance_score>=80 else '#14b8a6' if ai_saved.performance_score>=60 else '#ef4444' }}">
+            <div class="score-val">{{ ai_saved.performance_score|int }}</div>
+            <div class="score-lbl">Perf</div>
+          </div>
+        </div>
+        <div style="text-align:center">
+          <div class="score-ring"
+               style="border-color:{{ '#10b981' if ai_saved.stability_score>=80 else '#14b8a6' if ai_saved.stability_score>=60 else '#ef4444' }};
+                      color:{{ '#10b981' if ai_saved.stability_score>=80 else '#14b8a6' if ai_saved.stability_score>=60 else '#ef4444' }}">
+            <div class="score-val">{{ ai_saved.stability_score|int }}</div>
+            <div class="score-lbl">Stability</div>
+          </div>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+          <div class="d-flex gap-8 align-center">
+            <span class="text-muted text-sm">Trend:</span>
+            <span class="badge {% if ai_saved.torque_trend=='stable' %}badge-green{% elif ai_saved.torque_trend=='increasing' %}badge-amber{% else %}badge-blue{% endif %}">
+              {% if ai_saved.torque_trend=='increasing' %}📈{% elif ai_saved.torque_trend=='decreasing' %}📉{% else %}📊{% endif %}
+              {{ ai_saved.torque_trend }}
+            </span>
+          </div>
+          <div class="d-flex gap-8 align-center">
+            <span class="text-muted text-sm">Anomalies:</span>
+            <span class="mono fw-bold {{ 'text-red' if ai_saved.anomaly_count>0 else 'text-green' }}">{{ ai_saved.anomaly_count }}</span>
+          </div>
+          <div class="d-flex gap-8 align-center">
+            <span class="text-muted text-sm">Analyzed:</span>
+            <span class="text-xs">{{ ai_saved.analyzed_at[:16] }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Progress bars -->
+      <div style="margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span class="text-xs text-muted">Performance</span>
+          <span class="text-xs mono">{{ ai_saved.performance_score|int }}%</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill {{ 'green' if ai_saved.performance_score>=80 else 'red' if ai_saved.performance_score<60 else '' }}"
+               style="width:{{ ai_saved.performance_score }}%"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:8px;margin-bottom:4px">
+          <span class="text-xs text-muted">Stability</span>
+          <span class="text-xs mono">{{ ai_saved.stability_score|int }}%</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill blue" style="width:{{ ai_saved.stability_score }}%"></div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Insights -->
+      <div id="insightsPanel">
+        {% if ai_saved.insights_json %}
+        {% set insights = ai_saved.insights_json if ai_saved.insights_json is iterable and ai_saved.insights_json is not string else [] %}
+        <div style="display:flex;flex-direction:column;gap:8px">
+          {% for ins in insights %}
+          <div style="padding:10px 12px;border-radius:8px;display:flex;gap:10px;align-items:flex-start;
+               background:{% if ins.type=='critical' %}rgba(239,68,68,.08){% elif ins.type=='warning' %}rgba(20,184,166,.08){% elif ins.type=='success' %}rgba(16,185,129,.08){% else %}rgba(59,130,246,.08){% endif %};
+               border-left:3px solid {% if ins.type=='critical' %}var(--red){% elif ins.type=='warning' %}var(--accent){% elif ins.type=='success' %}var(--green){% else %}var(--blue){% endif %}">
+            <span style="font-size:18px;flex-shrink:0">{{ ins.icon }}</span>
+            <div>
+              <div style="font-weight:600;font-size:13px">{{ ins.title }}</div>
+              <div class="text-muted text-xs" style="margin-top:2px">{{ ins.detail }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+
+      {% else %}
+      <div style="text-align:center;padding:32px;color:var(--text3)">
+        <div style="font-size:40px;margin-bottom:12px">🤖</div>
+        <div style="font-size:15px;font-weight:600;margin-bottom:8px">No AI Analysis Yet</div>
+        <p style="font-size:13px;margin-bottom:16px">Click "Run Analysis" to analyze this job with AI</p>
+        {% if 'ai.run' in perms %}
+        <button class="btn btn-primary" onclick="runAI({{ selected_job.id }})">▶ Run AI Analysis</button>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Running indicator (hidden by default) -->
+    <div id="aiRunning" style="display:none" class="card">
+      <div style="text-align:center;padding:24px">
+        <div style="font-size:32px;margin-bottom:12px;animation:spin 2s linear infinite;display:inline-block">⚙️</div>
+        <div style="font-weight:600;margin-bottom:6px">Running AI Analysis...</div>
+        <div class="text-muted text-sm">Analyzing torque patterns, reruns, outliers...</div>
+        <div class="progress-bar mt-16"><div class="progress-fill" id="aiBar" style="width:0%"></div></div>
+      </div>
+    </div>
+  </div>
+
+  {% else %}
+  <div class="card">
+    <div style="text-align:center;padding:48px;color:var(--text3)">
+      <div style="font-size:48px;margin-bottom:12px">🤖</div>
+      <div style="font-size:16px;font-weight:600;margin-bottom:6px">AI Joint Analysis</div>
+      <p class="text-sm">Select a job from the left to view or run AI analysis</p>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+@keyframes spin { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
+</style>
+<script>
+async function runAI(jobId) {
+  document.getElementById('aiRunning').style.display = 'block';
+  const bar = document.getElementById('aiBar');
+  let pct = 0;
+  const iv = setInterval(() => { pct = Math.min(pct+5, 90); bar.style.width = pct+'%'; if(pct>=90) clearInterval(iv); }, 120);
+
+  try {
+    const r = await fetch(`/api/ai/analyze/${jobId}`, { method: 'POST' });
+    const data = await r.json();
+    clearInterval(iv); bar.style.width = '100%';
+
+    if (data.ok) {
+      toast(`🤖 AI done — Score: ${data.performance_score}, Stability: ${data.stability_score}`, 'success', 4000);
+
+      // Refresh insights panel
+      const panel = document.getElementById('insightsPanel');
+      if (panel && data.insights) {
+        const typeColors = { critical:'rgba(239,68,68,.08)', warning:'rgba(20,184,166,.08)', success:'rgba(16,185,129,.08)', info:'rgba(59,130,246,.08)' };
+        const typeBorders = { critical:'var(--red)', warning:'var(--accent)', success:'var(--green)', info:'var(--blue)' };
+        panel.innerHTML = '<div style="display:flex;flex-direction:column;gap:8px">' +
+          data.insights.map(ins => `
+            <div style="padding:10px 12px;border-radius:8px;display:flex;gap:10px;align-items:flex-start;background:${typeColors[ins.type]||typeColors.info};border-left:3px solid ${typeBorders[ins.type]||typeBorders.info}">
+              <span style="font-size:18px;flex-shrink:0">${ins.icon}</span>
+              <div><div style="font-weight:600;font-size:13px">${ins.title}</div><div style="color:var(--text3);font-size:11px;margin-top:2px">${ins.detail}</div></div>
+            </div>`).join('') + '</div>';
+      }
+
+      setTimeout(() => location.reload(), 1800);
+    } else {
+      toast('❌ AI analysis failed: ' + data.error, 'error');
+    }
+  } catch(e) {
+    toast('❌ Request failed', 'error');
+  }
+  setTimeout(() => document.getElementById('aiRunning').style.display='none', 2000);
+}
+</script>
+{% endblock %}

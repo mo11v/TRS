@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Fleet View{% endblock %}
+{% block page_title %}🚀 Fleet Analysis{% endblock %}
+{% block content %}
+<div class="stats-grid mb-20">
+  <div class="stat-card amber"><span class="stat-icon">🗂️</span><div class="stat-value">{{ fleet_stats.total_jobs }}</div><div class="stat-label">Jobs</div></div>
+  <div class="stat-card purple"><span class="stat-icon">🔩</span><div class="stat-value">{{ "{:,}".format(fleet_stats.total_joints|int) }}</div><div class="stat-label">Total Joints</div></div>
+  <div class="stat-card green"><span class="stat-icon">📊</span><div class="stat-value">{{ fleet_stats.avg_ft_mean }}</div><div class="stat-label">Avg FT (ft·lb)</div></div>
+  <div class="stat-card red"><span class="stat-icon">🔄</span><div class="stat-value">{{ fleet_stats.avg_rerun_rate }}%</div><div class="stat-label">Avg Rerun Rate</div></div>
+</div>
+
+{% if jobs %}
+<div class="card mb-16">
+  <div class="card-title mb-16">📈 Torque Comparison</div>
+  <canvas id="fleetCompare" height="200"></canvas>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-header"><div class="card-title">🚀 Fleet Jobs ({{ jobs|length }})</div></div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Job #</th><th>Customer/Rig</th><th>Device</th><th>Pipe Type</th><th>Joints</th><th>OK</th><th>Reruns</th><th>Rerun%</th><th>FT Mean</th><th>FT Std</th><th>Outliers</th><th>Date</th></tr>
+      </thead>
+      <tbody>
+        {% for j in jobs %}
+        <tr onclick="location.href='/jobs/{{ j.id }}'" style="cursor:pointer">
+          <td class="mono text-accent fw-bold">{{ j.job_number }}</td>
+          <td><div>{{ j.customer or '—' }}</div><div class="text-muted text-xs">{{ j.rig or '' }}</div></td>
+          <td>{% if j.device_code %}<span class="badge badge-blue">{{ j.device_code }}</span>{% else %}—{% endif %}</td>
+          <td><span class="text-xs">{{ j.pipe_type or '—' }}</span></td>
+          <td class="mono">{{ j.total_joints }}</td>
+          <td class="mono text-green">{{ j.ok_count }}</td>
+          <td class="mono {{ 'text-red' if j.rerun_count > 0 else '' }}">{{ j.rerun_count }}</td>
+          <td><span class="{{ 'text-red fw-bold' if j.rerun_rate>10 else 'text-accent' if j.rerun_rate>5 else 'text-green' }}">{{ "%.1f"|format(j.rerun_rate or 0) }}%</span></td>
+          <td class="mono text-accent">{{ "%.0f"|format(j.ft_mean or 0) }}</td>
+          <td class="mono">{{ "%.0f"|format(j.ft_std or 0) }}</td>
+          <td class="mono {{ 'text-red' if j.outlier_count>0 else 'text-green' }}">{{ j.outlier_count }}</td>
+          <td class="text-muted text-xs">{{ j.computed_at[:10] if j.computed_at else '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="12" style="text-align:center;padding:40px;color:var(--text3)">No MTT data yet — upload MTT reports to jobs first</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+const jobs = {{ jobs|tojson }};
+if (jobs.length > 0) {
+  const ctx = document.getElementById('fleetCompare');
+  if (ctx) {
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: jobs.map(j => j.job_number),
+        datasets: [
+          { label: 'FT Mean', data: jobs.map(j => j.ft_mean), backgroundColor: 'rgba(20,184,166,.7)', borderColor: '#14b8a6', borderWidth: 1, borderRadius: 3 },
+          { label: 'FT Min', data: jobs.map(j => j.ft_min), backgroundColor: 'rgba(16,185,129,.4)', borderColor: '#10b981', borderWidth: 1, borderRadius: 3 },
+          { label: 'FT Max', data: jobs.map(j => j.ft_max), backgroundColor: 'rgba(239,68,68,.4)', borderColor: '#ef4444', borderWidth: 1, borderRadius: 3 },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#94a3b8', font: { size: 10 } } } },
+        scales: {
+          x: { ticks: { color: '#64748b', font: { size: 10 }, maxRotation: 30 }, grid: { color: 'rgba(30,48,80,.5)' } },
+          y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: 'rgba(30,48,80,.5)' }, title: { display: true, text: 'ft·lb', color: '#64748b', font: { size: 9 } } }
+        }
+      }
+    });
+  }
+}
+</script>
+{% endblock %}

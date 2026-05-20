@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}Equipment Maintenance{% endblock %}
+{% block page_title %}🛠️ Equipment Maintenance{% endblock %}
+{% block topbar_actions %}
+<a class="btn btn-secondary btn-sm" href="/equipment-maintenance/export.xlsx">⬇ Export Excel</a>
+<a class="btn btn-secondary btn-sm" href="/equipment-maintenance/export.csv">CSV</a>
+<button class="btn btn-secondary btn-sm" onclick="openModal('importEquipmentModal')">⬆ Import Folder ZIP</button>
+<button class="btn btn-primary btn-sm" onclick="openModal('newEquipmentModal')">➕ New Equipment</button>
+{% endblock %}
+{% block extra_head %}
+<style>
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.form-grid label{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px}.form-grid input,.form-grid textarea,.form-grid select,.filter-row input,.filter-row select{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:9px 10px;margin-top:5px}.filter-row{display:grid;grid-template-columns:1fr 180px auto;gap:10px;align-items:end;margin-bottom:16px}@media(max-width:900px){.filter-row,.form-grid{grid-template-columns:1fr}}
+
+.equipment-category-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:16px}
+.category-card{display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.025);border:1px solid var(--border);border-radius:12px;padding:14px 16px;text-decoration:none;color:var(--text)}
+.category-card:hover{border-color:var(--accent);background:rgba(20,184,166,.06)}
+.category-card .cat-name{font-weight:800;font-size:15px}.category-card .cat-meta{font-size:11px;color:var(--text3);margin-top:3px}.category-card .cat-count{font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:800;color:var(--accent)}
+
+.equipment-group-wrap{display:grid;gap:12px}
+.equipment-group{background:rgba(255,255,255,.018);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.equipment-group summary{list-style:none;cursor:pointer;padding:16px 18px;display:flex;align-items:center;justify-content:space-between;gap:16px;background:linear-gradient(135deg,rgba(20,184,166,.06),rgba(59,130,246,.035))}
+.equipment-group summary::-webkit-details-marker{display:none}
+.group-title{display:flex;align-items:center;gap:12px;min-width:0}
+.group-icon{width:38px;height:38px;border-radius:12px;background:rgba(20,184,166,.12);border:1px solid rgba(20,184,166,.25);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.group-name{font-size:16px;font-weight:900;letter-spacing:.2px}
+.group-meta{font-size:12px;color:var(--text3);margin-top:2px}
+.group-actions{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.group-count{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:900;color:var(--accent)}
+.group-chevron{color:var(--text3);font-size:18px;transition:transform .2s}
+.equipment-group[open] .group-chevron{transform:rotate(90deg)}
+.group-body{padding:0}
+.equipment-mini-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;padding:16px}
+.asset-card{display:block;text-decoration:none;color:var(--text);background:rgba(255,255,255,.025);border:1px solid var(--border);border-radius:14px;padding:14px;transition:.15s}
+.asset-card:hover{transform:translateY(-1px);border-color:var(--accent);background:rgba(20,184,166,.055)}
+.asset-card-top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:10px}
+.asset-title{font-weight:900;font-size:15px}
+.asset-sub{font-size:12px;color:var(--text3);margin-top:3px}
+.asset-row{display:flex;justify-content:space-between;gap:10px;border-top:1px solid var(--border);padding-top:10px;margin-top:10px;font-size:12px;color:var(--text2)}
+.asset-row b{color:var(--text)}
+
+.chart-card-small{max-width:520px}
+.chart-card-small .chart-container{height:240px;max-height:240px;display:flex;align-items:center;justify-content:center}
+#equipmentStatusChart{width:240px!important;height:240px!important;max-width:240px!important;max-height:240px!important}
+
+.mobile-equipment-list{display:none}.mobile-equipment-card{display:block;background:rgba(255,255,255,.025);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px;color:var(--text);text-decoration:none}.mobile-equipment-card .top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}.mobile-equipment-card .title{font-weight:800}.mobile-equipment-card .meta{color:var(--text3);font-size:12px;margin-top:4px}.mobile-equipment-card .row{display:flex;justify-content:space-between;border-top:1px solid var(--border);margin-top:10px;padding-top:10px;font-size:12px}
+@media(max-width:768px){.desktop-equipment-table{display:none}.mobile-equipment-list{display:block}.equipment-category-grid{grid-template-columns:1fr}.topbar-actions .btn{padding:8px 10px;font-size:12px}.stats-grid{grid-template-columns:1fr 1fr}.grid-2{grid-template-columns:1fr!important}.filter-row{grid-template-columns:1fr!important}.modal{width:94vw}.modal-body{padding:14px}.modal-footer{flex-wrap:wrap}.modal-footer .btn{width:100%;justify-content:center}.equipment-mini-grid{grid-template-columns:1fr}.group-name{font-size:15px}.group-count{font-size:18px}.chart-card-small{max-width:100%}.chart-card-small .chart-container{height:200px}#equipmentStatusChart{width:190px!important;height:190px!important;max-width:190px!important;max-height:190px!important}}
+</style>
+{% endblock %}
+{% block content %}
+<div class="stats-grid">
+  <div class="stat-card blue"><span class="stat-icon">🔧</span><div class="stat-value">{{ stats.total }}</div><div class="stat-label">Equipment</div></div>
+  <div class="stat-card green"><span class="stat-icon">✅</span><div class="stat-value">{{ stats.available }}</div><div class="stat-label">Available</div></div>
+  <div class="stat-card amber"><span class="stat-icon">⏳</span><div class="stat-value">{{ stats.due_soon }}</div><div class="stat-label">Due 30 Days</div></div>
+  <div class="stat-card red"><span class="stat-icon">🚨</span><div class="stat-value">{{ stats.overdue }}</div><div class="stat-label">Overdue</div></div>
+</div>
+
+{% if category_stats %}
+<div class="equipment-category-grid">
+  {% for c in category_stats %}
+  <a class="category-card" href="/equipment-maintenance?q={{ c.category }}">
+    <div>
+      <div class="cat-name">{{ c.category or 'Uncategorized' }}</div>
+      <div class="cat-meta">{{ c.available or 0 }} available · {{ c.maintenance or 0 }} maintenance · {{ c.out_of_service or 0 }} out</div>
+    </div>
+    <div class="cat-count">{{ c.total }}</div>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="grid-2 mb-16" style="align-items:start">
+  <div class="card chart-card-small">
+    <div class="card-header"><div class="card-title">Maintenance Overview</div><span class="badge badge-cyan">Live register</span></div>
+    <div class="chart-container">
+      <canvas id="equipmentStatusChart"></canvas>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><div class="card-title">Workflow</div></div>
+    <div class="text-muted text-sm" style="line-height:1.8">
+      1) Upload a ZIP folder like <span class="mono">HPU/111470.xlsx</span> or <span class="mono">Power Tong/110093.xlsx</span><br>
+      2) The platform creates equipment records automatically by category and serial number<br>
+      3) Open asset → Live Sync → edit cells → Download Updated Excel
+    </div>
+  </div>
+</div>
+
+<div class="card mb-20">
+  <form class="filter-row" method="get" action="/equipment-maintenance">
+    <label>Search<input name="q" value="{{ filters.q }}" placeholder="Hydraulic / serial / location"></label>
+    <label>Status<select name="status"><option value="">All</option>{% for st in ['Available','In Use','Maintenance','Out of Service'] %}<option value="{{ st }}" {% if filters.status==st %}selected{% endif %}>{{ st }}</option>{% endfor %}</select></label>
+    <button class="btn btn-secondary" type="submit">Filter</button>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">📋 Equipment Library</div>
+    <span class="badge badge-cyan">Grouped by equipment type</span>
+  </div>
+
+  {% if category_stats %}
+  <div class="equipment-group-wrap">
+    {% for c in category_stats %}
+      {% set cat_name = c.category or 'Uncategorized' %}
+      <details class="equipment-group" {% if loop.first or filters.q == cat_name %}open{% endif %}>
+        <summary>
+          <div class="group-title">
+            <div class="group-icon">{% if 'HPU' in cat_name|upper %}⚙️{% elif 'TONG' in cat_name|upper %}🔩{% else %}🛠️{% endif %}</div>
+            <div>
+              <div class="group-name">{{ cat_name }}</div>
+              <div class="group-meta">{{ c.available or 0 }} available · {{ c.maintenance or 0 }} maintenance · {{ c.out_of_service or 0 }} out of service</div>
+            </div>
+          </div>
+          <div class="group-actions">
+            <span class="group-count">{{ c.total }}</span>
+            <span class="group-chevron">›</span>
+          </div>
+        </summary>
+
+        <div class="group-body">
+          <div class="equipment-mini-grid">
+            {% for e in equipment %}
+              {% if (e.category or 'Uncategorized') == cat_name %}
+              <a class="asset-card" href="/equipment-maintenance/{{ e.id }}">
+                <div class="asset-card-top">
+                  <div>
+                    <div class="asset-title">{{ e.name }}</div>
+                    <div class="asset-sub">{{ e.serial_no or 'No serial' }}</div>
+                  </div>
+                  <span class="badge {% if e.status=='Available' %}badge-green{% elif e.status=='Maintenance' %}badge-amber{% elif e.status=='Out of Service' %}badge-red{% else %}badge-blue{% endif %}">{{ e.status }}</span>
+                </div>
+                <div class="asset-row"><span>Last service</span><b>{{ e.last_service_date or '—' }}</b></div>
+                <div class="asset-row"><span>Next service</span><b>{{ e.next_service_date or '—' }}</b></div>
+                <div class="asset-row"><span>Logs</span><b>{{ e.log_count }}</b></div>
+              </a>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+      </details>
+    {% endfor %}
+  </div>
+  {% else %}
+    <div class="text-muted" style="text-align:center;padding:30px">No equipment yet. Add first asset.</div>
+  {% endif %}
+</div>
+
+<div id="importEquipmentModal" class="modal-overlay">
+  <div class="modal">
+    <form method="post" action="/equipment-maintenance/import-folder" enctype="multipart/form-data">
+      <div class="modal-header"><div class="modal-title">Import Equipment Folder</div><button type="button" class="modal-close" onclick="closeModal('importEquipmentModal')">×</button></div>
+      <div class="modal-body"><div class="form-grid">
+        <label>Category<input name="category" value="HPU" placeholder="HPU / Power Tong"></label>
+        <label>Location<input name="location" placeholder="Workshop / Rig / Yard"></label>
+        <label style="grid-column:1/-1">ZIP File<input type="file" name="file" accept=".zip" required></label>
+        <div class="text-muted text-sm" style="grid-column:1/-1;line-height:1.6">Upload a ZIP like <span class="mono">HPU/111617.xlsx</span> or <span class="mono">Power Tong/110093.xlsx</span>. The platform creates one equipment record per Excel file using the folder name as category and file name as equipment ID.</div>
+      </div></div>
+      <div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="closeModal('importEquipmentModal')">Cancel</button><button class="btn btn-primary" type="submit">Import</button></div>
+    </form>
+  </div>
+</div>
+
+<div id="newEquipmentModal" class="modal-overlay">
+  <div class="modal">
+    <form method="post" action="/equipment-maintenance/create">
+      <div class="modal-header"><div class="modal-title">New Equipment</div><button type="button" class="modal-close" onclick="closeModal('newEquipmentModal')">×</button></div>
+      <div class="modal-body"><div class="form-grid">
+        <label>Name<input name="name" required placeholder="Hydraulic Power Unit #1"></label>
+        <label>Category<input name="category" placeholder="HPU / Power Tong"></label>
+        <label>Serial No<input name="serial_no"></label>
+        <label>Status<select name="status">{% for st in ['Available','In Use','Maintenance','Out of Service'] %}<option value="{{ st }}">{{ st }}</option>{% endfor %}</select></label>
+        <label>Manufacture Date<input type="date" name="manufacture_date"></label>
+        <label>Last Service<input type="date" name="last_service_date"></label>
+        <label>Next Service<input type="date" name="next_service_date"></label>
+        <label>Location<input name="location"></label>
+        <label style="grid-column:1/-1">Notes<textarea name="notes" rows="3"></textarea></label>
+      </div></div>
+      <div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="closeModal('newEquipmentModal')">Cancel</button><button class="btn btn-primary" type="submit">Create</button></div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+const equipmentStats = {{ stats|tojson }};
+const eqCtx = document.getElementById('equipmentStatusChart');
+if (eqCtx && window.Chart) {
+  new Chart(eqCtx, {
+    type: 'doughnut',
+    data: { labels:['Available','Due Soon','Overdue'], datasets:[{ data:[equipmentStats.available||0,equipmentStats.due_soon||0,equipmentStats.overdue||0], backgroundColor:['rgba(16,185,129,.75)','rgba(20,184,166,.75)','rgba(239,68,68,.75)'], borderColor:'#0f1f35' }] },
+    options: { responsive:false, maintainAspectRatio:false, plugins:{legend:{position:'bottom', labels:{color:'#94a3b8', boxWidth:12, font:{size:11}}}}, cutout:'68%', layout:{padding:4} }
+  });
+}
+if (window.TRSRealtime) {
+  TRSRealtime.connect('equipment', (msg)=>{
+    if (!msg || !msg.type || msg.type === 'presence') return;
+    toast('Equipment live update: ' + msg.type.replaceAll('_',' '), 'info', 1800);
+  });
+  TRSRealtime.injectStatusBadge();
+}
+</script>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Job File Detail{% endblock %}
+{% block page_title %}📄 Job File Review{% endblock %}
+{% block topbar_actions %}
+<a class="btn btn-secondary btn-sm" href="/job-files?company={{ f.company|urlencode }}&job_year={{ f.job_year|urlencode }}&job_month={{ f.job_month|urlencode }}&rig={{ f.rig|urlencode }}&connection_name={{ f.connection_name|urlencode }}">← Back</a>
+{% if f.file_type=='pdf' %}<a class="btn btn-primary btn-sm" target="_blank" href="/job-files/{{ f.id }}/preview">Preview PDF</a>{% endif %}
+<a class="btn btn-secondary btn-sm" href="/job-files/{{ f.id }}/download">Download</a>
+{% if user_role in ['Admin','Manager'] %}<form method="post" action="/job-files/{{ f.id }}/delete" style="display:inline" onsubmit="return confirm('Delete this file?')"><button class="btn btn-red btn-sm" type="submit">Delete</button></form>{% endif %}
+{% endblock %}
+{% block extra_head %}<style>.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.form-grid label{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px}.form-grid input,.form-grid textarea{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:9px 10px;margin-top:5px}.path-pill{font-family:'JetBrains Mono',monospace;color:var(--accent);font-size:12px}.timeline-item{padding:12px;border-left:2px solid var(--border);margin-left:8px}.timeline-item:first-child{border-left-color:var(--accent)}@media(max-width:900px){.form-grid{grid-template-columns:1fr}}</style>{% endblock %}
+{% block content %}
+<div class="grid-2" style="align-items:start">
+  <div class="card"><div class="card-header"><div class="card-title">Smart classification</div><span class="badge {% if f.detection_confidence and f.detection_confidence>=80 %}badge-green{% else %}badge-amber{% endif %}">{{ f.detection_confidence or 0 }}% confidence</span></div>
+    <div class="mb-16"><div class="text-muted text-xs">Current confirmed path</div><div class="path-pill">{{ f.company }}/{{ f.job_year }}/{{ f.job_month }}/{{ f.rig }}/{{ f.connection_name }}</div></div>
+    <div class="mb-16"><div class="text-muted text-xs">Detected suggestion</div><div class="path-pill">{{ f.detected_path or '—' }}</div></div>
+    <div class="mb-16"><div class="text-muted text-xs">Detected well metadata</div><div>{{ f.well_name if f.well_name and f.well_name!='GENERAL' else '—' }}</div></div>
+    <form method="post" action="/job-files/{{ f.id }}/move"><div class="form-grid"><label>Company<input name="company" required value="{{ f.company }}"></label><label>Year<input name="job_year" required value="{{ f.job_year }}"></label><label>Month<input name="job_month" required value="{{ f.job_month or '' }}"></label><label>Rig<input name="rig" required value="{{ f.rig }}"></label><label>Connection Type<input name="connection_name" required value="{{ f.connection_name }}"></label><label style="grid-column:1/-1">Notes<textarea name="notes" rows="3">{{ f.notes or '' }}</textarea></label></div><div class="mt-16"><button class="btn btn-primary" type="submit">Confirm / Move File Path</button></div></form>
+  </div>
+  <div class="card"><div class="card-header"><div class="card-title">File information</div></div><table><tr><td class="text-muted">Name</td><td>{{ f.original_name }}</td></tr><tr><td class="text-muted">Job Name</td><td>{{ f.job_name or '—' }}</td></tr><tr><td class="text-muted">Report Date</td><td>{{ f.report_date or '—' }}</td></tr><tr><td class="text-muted">Type</td><td class="mono">{{ f.file_type }}</td></tr><tr><td class="text-muted">Size</td><td class="mono">{{ (f.file_size/1024)|round(1) }} KB</td></tr><tr><td class="text-muted">Uploaded</td><td>{{ f.created_at[:16] }} by {{ f.full_name or f.username or '—' }}</td></tr><tr><td class="text-muted">Confirmed</td><td>{{ f.confirmed_at or '—' }}</td></tr></table></div>
+</div>
+<div class="card mt-16"><div class="card-header"><div class="card-title">Activity timeline</div></div>{% for a in activity %}<div class="timeline-item"><div class="fw-bold">{{ a.action }}</div><div class="text-muted text-xs">{{ a.created_at[:16] }} · {{ a.full_name or a.username or 'system' }}</div><div class="text-sm">{{ a.detail or '' }}</div></div>{% else %}<div class="text-muted">No activity yet.</div>{% endfor %}</div>
+{% endblock %}

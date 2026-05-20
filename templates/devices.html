@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Devices{% endblock %}
+{% block page_title %}🔧 Devices{% endblock %}
+{% block topbar_actions %}
+{% if 'devices.create' in perms %}
+<button class="btn btn-primary btn-sm" onclick="openModal('newDeviceModal')">➕ Add Device</button>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="stats-grid mb-20">
+  <div class="stat-card blue">
+    <span class="stat-icon">🔧</span>
+    <div class="stat-value">{{ devices|length }}</div>
+    <div class="stat-label">Total Devices</div>
+  </div>
+  <div class="stat-card green">
+    <span class="stat-icon">✅</span>
+    <div class="stat-value">{{ devices|selectattr('status','equalto','Available')|list|length }}</div>
+    <div class="stat-label">Available</div>
+  </div>
+  <div class="stat-card amber">
+    <span class="stat-icon">▶️</span>
+    <div class="stat-value">{{ devices|selectattr('status','equalto','In Job')|list|length }}</div>
+    <div class="stat-label">In Job</div>
+  </div>
+  <div class="stat-card red">
+    <span class="stat-icon">🔴</span>
+    <div class="stat-value">{{ devices|selectattr('status','equalto','Out of Service')|list|length }}</div>
+    <div class="stat-label">Out of Service</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">All Devices ({{ devices|length }})</div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Code</th><th>Name</th><th>Category</th><th>Model</th><th>Serial</th><th>Location</th><th>Jobs</th><th>Status</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for d in devices %}
+        <tr onclick="location.href='/devices/{{ d.id }}'" style="cursor:pointer">
+          <td class="mono fw-bold text-accent">{{ d.code }}</td>
+          <td><div style="font-weight:600">{{ d.name }}</div></td>
+          <td><span class="text-xs text-muted">{{ d.category }}</span></td>
+          <td>{{ d.model or '—' }}</td>
+          <td class="mono text-xs">{{ d.serial_no or '—' }}</td>
+          <td>{{ d.location or '—' }}</td>
+          <td class="mono">
+            {{ d.total_jobs or 0 }}
+            {% if d.active_jobs and d.active_jobs > 0 %}
+            <span class="badge badge-green" style="font-size:9px;margin-left:3px">{{ d.active_jobs }} active</span>
+            {% endif %}
+          </td>
+          <td>
+            <span class="badge
+              {% if d.status=='Available' %}badge-green
+              {% elif d.status=='In Job' %}badge-blue
+              {% elif d.status=='Maintenance' %}badge-amber
+              {% else %}badge-red{% endif %}">{{ d.status }}</span>
+          </td>
+          <td onclick="event.stopPropagation()">
+            <a href="/devices/{{ d.id }}" class="btn btn-ghost btn-sm">View →</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="9" style="text-align:center;padding:40px;color:var(--text3)">
+            <div style="font-size:30px;margin-bottom:8px">🔧</div>
+            No devices yet
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if 'devices.create' in perms %}
+<div class="modal-overlay" id="newDeviceModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">➕ Add Device</div>
+      <button class="modal-close" onclick="closeModal('newDeviceModal')">×</button>
+    </div>
+    <form method="post" action="/devices/create">
+      <div class="modal-body">
+        <div class="grid-2">
+          <div class="form-group"><label class="form-label">Code *</label><input type="text" name="code" class="form-control" placeholder="TRS-001" required></div>
+          <div class="form-group"><label class="form-label">Name *</label><input type="text" name="name" class="form-control" required></div>
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Category</label>
+            <select name="category" class="form-control">
+              {% for c in device_categories %}<option>{{ c }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="form-group"><label class="form-label">Model</label><input type="text" name="model" class="form-control"></div>
+        </div>
+        <div class="grid-2">
+          <div class="form-group"><label class="form-label">Serial No</label><input type="text" name="serial_no" class="form-control"></div>
+          <div class="form-group"><label class="form-label">Location</label><input type="text" name="location" class="form-control"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Notes</label><textarea name="notes" class="form-control"></textarea></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('newDeviceModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Add Device</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

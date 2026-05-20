@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#050d1a">
+<title>TRS Field Bridge v2</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#050d1a;--bg2:#0a1628;--bg3:#0f1f35;
+  --border:#1e3050;--text:#e2e8f0;--text2:#94a3b8;--text3:#64748b;
+  --accent:#f59e0b;--green:#10b981;--red:#ef4444;--blue:#3b82f6;--purple:#8b5cf6;
+}
+html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Segoe UI',sans-serif;min-height:100vh;overflow-x:hidden}
+
+/* HEADER */
+.hdr{background:var(--bg2);border-bottom:1px solid var(--border);padding:11px 14px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:99;flex-wrap:wrap;gap:6px}
+.hdr-logo{font-size:19px;font-weight:800;color:var(--accent)}
+.hdr-sub{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px}
+.hdr-dots{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ds{display:flex;align-items:center;gap:4px;font-size:10px;font-weight:600;white-space:nowrap}
+.dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.dot.on{background:var(--green);box-shadow:0 0 5px var(--green);animation:bl 1.5s ease infinite}
+.dot.off{background:var(--red)}
+.dot.mid{background:var(--accent);animation:bl .7s ease infinite}
+@keyframes bl{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* LAYOUT */
+.pg{padding:11px;display:flex;flex-direction:column;gap:10px;padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+
+/* GAUGE */
+.gauge{background:var(--bg2);border:2px solid var(--border);border-radius:16px;padding:16px 14px 12px;text-align:center;transition:border-color .3s,box-shadow .3s}
+.gauge.g-active{border-color:rgba(245,158,11,.65)}
+.gauge.g-over  {border-color:rgba(239,68,68,.8);box-shadow:0 0 24px rgba(239,68,68,.15)}
+.gauge.g-done  {border-color:rgba(16,185,129,.65)}
+.g-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:var(--text3);margin-bottom:5px}
+.g-val{font-size:76px;font-weight:900;line-height:1;margin-bottom:3px;transition:color .2s;font-variant-numeric:tabular-nums}
+.g-val.v-low {color:var(--blue)} .g-val.v-ok{color:var(--green)} .g-val.v-over{color:var(--red)} .g-val.v-idle{color:var(--text3)}
+.g-unit{font-size:12px;color:var(--text3);margin-bottom:10px}
+.bar-wrap{height:10px;background:var(--bg3);border-radius:5px;overflow:hidden;border:1px solid var(--border)}
+.bar-fill{height:100%;border-radius:5px;transition:width .35s ease,background .3s}
+.zone-lbl{display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-top:3px;padding:0 1px}
+
+/* STATS */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+.stat{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 4px;text-align:center}
+.sv{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
+.sv.a{color:var(--accent)}.sv.g{color:var(--green)}.sv.b{color:var(--blue)}.sv.p{color:var(--purple)}
+.sl{font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-top:1px}
+
+/* STATE BADGE */
+.state{padding:8px 12px;border-radius:20px;font-size:12px;font-weight:800;text-align:center;letter-spacing:1px}
+.s-IDLE  {background:rgba(100,116,139,.12);color:var(--text3);border:1px solid var(--border)}
+.s-ACTIVE{background:rgba(245,158,11,.12); color:var(--accent);border:1px solid rgba(245,158,11,.35)}
+.s-DONE  {background:rgba(16,185,129,.12); color:var(--green); border:1px solid rgba(16,185,129,.35)}
+
+/* SECTION */
+.sec{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--text3);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:11px;padding:12px}
+.stag{padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600}
+.st-ok {background:rgba(16,185,129,.15);color:var(--green);border:1px solid rgba(16,185,129,.3)}
+.st-err{background:rgba(239,68,68,.15); color:var(--red);  border:1px solid rgba(239,68,68,.3)}
+.st-mid{background:rgba(245,158,11,.15);color:var(--accent);border:1px solid rgba(245,158,11,.3)}
+.st-off{background:rgba(100,116,139,.12);color:var(--text3);border:1px solid var(--border)}
+
+/* FIELDS */
+.fld{display:flex;align-items:center;gap:7px;margin-bottom:8px}
+.fld label{font-size:10px;color:var(--text2);font-weight:600;min-width:58px}
+.fld input{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:9px 10px;color:var(--text);font-size:13px;font-family:'Courier New',monospace;outline:none;-webkit-appearance:none;min-width:0}
+.fld input:focus{border-color:var(--accent)}
+
+/* BUTTONS */
+.btn{width:100%;padding:13px;border-radius:9px;font-size:14px;font-weight:700;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;transition:all .12s}
+.btn:active{transform:scale(.97)}
+.btn-green{background:var(--green);color:#fff}
+.btn-red  {background:var(--red);  color:#fff}
+.btn-ghost{background:var(--bg3);  color:var(--text2);border:1px solid var(--border)}
+.btn-blue {background:var(--blue); color:#fff}
+.btn-row  {display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.btn:disabled{background:var(--bg3);color:var(--text3);cursor:not-allowed;transform:none}
+
+/* TABS */
+.tabs{display:flex;gap:4px;background:var(--bg3);border-radius:10px;padding:3px}
+.tab{flex:1;padding:8px;border-radius:8px;font-size:12px;font-weight:600;text-align:center;cursor:pointer;color:var(--text3);transition:all .15s;border:none;background:none}
+.tab.active{background:var(--bg2);color:var(--text);border:1px solid var(--border)}
+.tab-panel{display:none}.tab-panel.active{display:block}
+
+/* LOG */
+.log{background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:9px 10px;font-family:'Courier New',monospace;font-size:10px;color:var(--text2);max-height:140px;overflow-y:auto;line-height:1.8}
+.lo{color:var(--green)}.le{color:var(--red)}.li{color:var(--blue)}.lw{color:var(--accent)}
+
+/* PUSH STATS */
+.pst{display:flex;gap:12px;justify-content:center;font-size:10px;color:var(--text3);margin-top:6px}
+.pst b{color:var(--text2)}
+
+/* JOINT HISTORY */
+.jh-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px}
+.jh-row:last-child{border-bottom:none}
+.jh-num{font-weight:800;color:var(--accent);min-width:28px;font-family:'Courier New',monospace}
+.jh-peak{font-family:'Courier New',monospace;font-weight:700}
+.jh-state{margin-left:auto;font-size:10px;padding:2px 7px;border-radius:10px;font-weight:600}
+.jh-ok  {background:rgba(16,185,129,.15);color:var(--green)}
+.jh-warn{background:rgba(245,158,11,.15);color:var(--accent)}
+.jh-over{background:rgba(239,68,68,.15); color:var(--red)}
+
+/* FLASH */
+@keyframes flashRed{0%,100%{background:var(--bg2)}50%{background:rgba(239,68,68,.14)}}
+.flash{animation:flashRed .35s ease 3}
+
+/* FIRESTORE badge */
+.fs-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.fs-on {background:rgba(139,92,246,.15);color:var(--purple);border:1px solid rgba(139,92,246,.3)}
+.fs-off{background:rgba(100,116,139,.12);color:var(--text3);border:1px solid var(--border)}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="hdr">
+  <div>
+    <div class="hdr-logo">⚙ TRS Bridge <span style="font-size:11px;font-weight:400;color:var(--text3)">v2</span></div>
+    <div class="hdr-sub">Field Data Relay</div>
+  </div>
+  <div class="hdr-dots">
+    <div class="ds"><div class="dot off" id="dEsp"></div><span id="tEsp">ESP</span></div>
+    <div class="ds"><div class="dot off" id="dJam"></div><span id="tJam">TRS</span></div>
+    <div class="ds"><div class="dot off" id="dFs"></div><span id="tFs">FS</span></div>
+  </div>
+</div>
+
+<div class="pg">
+
+  <!-- TORQUE GAUGE -->
+  <div class="gauge" id="gaugeCard">
+    <div class="g-lbl">Live Torque</div>
+    <div class="g-val v-idle" id="gVal">—</div>
+    <div class="g-unit">ft·lb (raw)</div>
+    <div class="bar-wrap"><div class="bar-fill" id="gBar" style="width:0%"></div></div>
+    <div class="zone-lbl">
+      <span id="zMin">MIN:—</span><span id="zOpt">OPT:—</span><span id="zMax">MAX:—</span>
+    </div>
+  </div>
+
+  <!-- STATE + STATS -->
+  <div class="state s-IDLE" id="stateBadge">⏸ IDLE</div>
+
+  <div class="stats">
+    <div class="stat"><div class="sv a" id="sJoints">0</div><div class="sl">Joints</div></div>
+    <div class="stat"><div class="sv g" id="sPeak">—</div><div class="sl">Peak</div></div>
+    <div class="stat"><div class="sv b" id="sPushed">0</div><div class="sl">TRS</div></div>
+    <div class="stat"><div class="sv p" id="sFs">0</div><div class="sl">FS</div></div>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('conn')">🔌 Connect</button>
+    <button class="tab"        onclick="switchTab('joints')">🔩 Joints</button>
+    <button class="tab"        onclick="switchTab('cloud')">☁️ Cloud</button>
+    <button class="tab"        onclick="switchTab('log')">📋 Log</button>
+  </div>
+
+  <!-- TAB: CONNECT -->
+  <div class="tab-panel active" id="tab-conn">
+
+    <!-- ESP32 -->
+    <div class="sec">① ESP32 Field Unit
+      <span class="stag st-off" id="stEsp">Disconnected</span>
+    </div>
+    <div class="card" style="margin-bottom:10px">
+      <div class="fld">
+        <label>ESP IP</label>
+        <input id="espIp" type="text" value="192.168.99.1"
+               inputmode="url" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-ghost" onclick="connectESP()">🔌 Connect WS</button>
+        <button class="btn btn-ghost" onclick="testHTTP()">🔍 Test /data</button>
+      </div>
+    </div>
+
+    <!-- TRS Platform -->
+    <div class="sec">② TRS Server
+      <span class="stag st-off" id="stJam">Not pushing</span>
+    </div>
+    <div class="card" style="margin-bottom:10px">
+      <div class="fld">
+        <label>URL</label>
+        <input id="jamUrl" type="url" placeholder="https://trs-platform.onrender.com"
+               inputmode="url" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+      </div>
+      <div class="fld">
+        <label>API Key</label>
+        <input id="jamKey" type="text" value="trs-esp-key-2026"
+               autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+      </div>
+      <div class="fld">
+        <label>Device</label>
+        <input id="jamDev" type="text" value="TRS-001"
+               autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+      </div>
+      <div class="fld">
+        <label>Job ID</label>
+        <input id="jamJob" type="number" value="1" inputmode="numeric">
+      </div>
+    </div>
+
+    <!-- START/STOP -->
+    <div class="sec">③ Bridge Control</div>
+    <div class="btn-row" style="margin-bottom:6px">
+      <button class="btn btn-green" id="btnStart" onclick="startBridge()">▶ Start</button>
+      <button class="btn btn-red"   id="btnStop"  onclick="stopBridge()" disabled>■ Stop</button>
+    </div>
+    <div class="pst">
+      <span>Pushed: <b id="cPushed">0</b></span>
+      <span>FS: <b id="cFs">0</b></span>
+      <span>Errors: <b id="cErrors">0</b></span>
+      <span>Rate: <b id="cRate">—</b>/s</span>
+    </div>
+  </div>
+
+  <!-- TAB: JOINTS -->
+  <div class="tab-panel" id="tab-joints">
+    <div class="sec">🔩 Joint History (local session)</div>
+    <div class="card">
+      <div id="jointList" style="max-height:320px;overflow-y:auto">
+        <div style="text-align:center;padding:24px;color:var(--text3);font-size:12px">
+          No joints yet — waiting for DONE event...
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: CLOUD -->
+  <div class="tab-panel" id="tab-cloud">
+    <div class="sec">☁️ Firestore Direct Write
+      <span class="fs-badge fs-off" id="fsBadge">Disabled</span>
+    </div>
+    <div class="card" style="margin-bottom:10px">
+      <div class="fld">
+        <label>API Key</label>
+        <input id="fsApiKey" type="text" placeholder="AIzaSy..."
+               autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+      </div>
+      <div class="fld">
+        <label>Project</label>
+        <input id="fsProject" type="text" placeholder="trs-platform-xxxxx"
+               autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+      </div>
+      <div class="fld">
+        <label>Collection</label>
+        <input id="fsCollection" type="text" value="jam_scada"
+               autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+      </div>
+      <button class="btn btn-blue" onclick="testFirestore()" style="margin-top:4px">
+        🔍 Test Firestore Connection
+      </button>
+    </div>
+
+    <div class="sec">📊 Usage Stats</div>
+    <div class="card" id="cloudStats" style="font-size:12px;color:var(--text2);line-height:2">
+      Press "Test" to check connection
+    </div>
+
+    <div style="margin-top:10px;padding:10px 12px;background:rgba(139,92,246,.07);border:1px solid rgba(139,92,246,.2);border-radius:9px;font-size:11px;color:var(--text2);line-height:1.8">
+      <div style="font-weight:700;color:var(--purple);margin-bottom:4px">📖 Firestore Setup</div>
+      1. Firebase Console → Project Settings<br>
+      2. General → Web apps → Add app<br>
+      3. Copy <b>apiKey</b> و <b>projectId</b><br>
+      4. Firestore → Rules → allow write from mobile<br>
+      5. ضيف هنا واضغط Test
+    </div>
+  </div>
+
+  <!-- TAB: LOG -->
+  <div class="tab-panel" id="tab-log">
+    <div class="sec">📋 Event Log
+      <button class="btn btn-ghost" style="width:auto;padding:3px 10px;font-size:10px;margin-left:auto" onclick="clearLog()">Clear</button>
+    </div>
+    <div class="log" id="logBox"></div>
+    <div class="pst" style="margin-top:8px">
+      <span>Lines: <b id="logLines">0</b></span>
+      <span>Session: <b id="sessionTimer">00:00:00</b></span>
+    </div>
+  </div>
+
+</div><!-- end .pg -->
+
+<!-- Firebase SDK -->
+<script type="module">
+import { initializeApp }           from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getFirestore, collection,
+         addDoc, serverTimestamp }  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+// ══════════════════════════════════════════════════════
+//  PERSISTENCE
+// ══════════════════════════════════════════════════════
+const LS = ['espIp','jamUrl','jamKey','jamDev','jamJob','fsApiKey','fsProject','fsCollection'];
+function save(){ LS.forEach(k=>{ const e=document.getElementById(k); if(e) localStorage.setItem('trs_'+k,e.value); }); }
+function load(){ LS.forEach(k=>{ const v=localStorage.getItem('trs_'+k); const e=document.getElementById(k); if(e&&v!=null) e.value=v; }); }
+load();
+LS.forEach(k=>{ const e=document.getElementById(k); if(e) e.addEventListener('change',save); });
+
+const G = {
+  get espIp()      { return (document.getElementById('espIp').value||'192.168.99.1').trim(); },
+  get jamUrl()     { return (document.getElementById('jamUrl').value||'').trim().replace(/\/$/,''); },
+  get jamKey()     { return (document.getElementById('jamKey').value||'').trim(); },
+  get jamDev()     { return (document.getElementById('jamDev').value||'TRS-001').trim(); },
+  get jamJob()     { return parseInt(document.getElementById('jamJob').value)||1; },
+  get fsApiKey()   { return (document.getElementById('fsApiKey').value||'').trim(); },
+  get fsProject()  { return (document.getElementById('fsProject').value||'').trim(); },
+  get fsCollection(){ return (document.getElementById('fsCollection').value||'jam_scada').trim(); },
+};
+
+// ══════════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════════
+let ws=null, running=false, pushTimer=null, rateTimer=null;
+let pushCount=0, errCount=0, rateCount=0, fsCount=0;
+let lastData=null, prevState='IDLE', sessionStart=Date.now();
+let fsApp=null, fsDb=null, fsEnabled=false;
+let jointHistory=[];  // [{num, peak, state, ts}]
+
+// ══════════════════════════════════════════════════════
+//  TABS
+// ══════════════════════════════════════════════════════
+function switchTab(id){
+  document.querySelectorAll('.tab').forEach((t,i)=>{
+    const ids=['conn','joints','cloud','log'];
+    t.classList.toggle('active', ids[i]===id);
+  });
+  document.querySelectorAll('.tab-panel').forEach(p=>{
+    p.classList.toggle('active', p.id==='tab-'+id);
+  });
+}
+window.switchTab = switchTab;
+
+// ══════════════════════════════════════════════════════
+//  LOG
+// ══════════════════════════════════════════════════════
+let logCount=0;
+function log(msg, type='i'){
+  const box=document.getElementById('logBox');
+  const ts=new Date().toLocaleTimeString('en-GB');
+  const cls={o:'lo',e:'le',i:'li',w:'lw'}[type]||'';
+  const d=document.createElement('div');
+  d.className=cls; d.textContent=`[${ts}] ${msg}`;
+  box.appendChild(d);
+  while(box.children.length>100) box.removeChild(box.firstChild);
+  box.scrollTop=box.scrollHeight;
+  document.getElementById('logLines').textContent=++logCount;
+}
+function clearLog(){
+  document.getElementById('logBox').innerHTML='';
+  logCount=0;
+  document.getElementById('logLines').textContent='0';
+}
+window.clearLog=clearLog;
+
+// ══════════════════════════════════════════════════════
+//  STATUS DOTS
+// ══════════════════════════════════════════════════════
+function dot(id,s){ document.getElementById(id).className='dot '+s; }
+function txt(id,t){ document.getElementById(id).textContent=t; }
+function stag(id,cls,t){ const e=document.getElementById(id); if(e){e.className='stag '+cls;e.textContent=t;} }
+
+function setESP(s,msg){ dot('dEsp',s); txt('tEsp','ESP:'+msg); stag('stEsp',{on:'st-ok',off:'st-err',mid:'st-mid'}[s]||'st-off',msg); }
+function setJAM(s,msg){ dot('dJam',s); txt('tJam','TRS:'+msg); stag('stJam',{on:'st-ok',off:'st-err',mid:'st-mid'}[s]||'st-off',msg); }
+function setFS(s,msg) { dot('dFs',s);  txt('tFs','FS:'+msg); }
+
+// ══════════════════════════════════════════════════════
+//  FIRESTORE INIT
+// ══════════════════════════════════════════════════════
+async function initFirestore(){
+  const key=G.fsApiKey, proj=G.fsProject;
+  if(!key||!proj){ setFS('off','No config'); return false; }
+  try{
+    if(!fsApp){
+      fsApp = initializeApp({ apiKey:key, projectId:proj }, 'trs-bridge');
+    }
+    fsDb = getFirestore(fsApp);
+    fsEnabled=true;
+    setFS('on','Ready');
+    document.getElementById('fsBadge').className='fs-badge fs-on';
+    document.getElementById('fsBadge').textContent='✓ Connected';
+    log(`Firestore connected: ${proj}`,'o');
+    return true;
+  }catch(e){
+    setFS('off','Error');
+    log('Firestore init: '+e.message,'e');
+    return false;
+  }
+}
+
+async function writeToFirestore(data){
+  if(!fsEnabled||!fsDb) return false;
+  try{
+    await addDoc(collection(fsDb, G.fsCollection), {
+      ...data,
+      ts_server: serverTimestamp(),
+    });
+    fsCount++;
+    document.getElementById('sFs').textContent=fsCount;
+    document.getElementById('cFs').textContent=fsCount;
+    return true;
+  }catch(e){
+    if(fsCount===0) log('Firestore write: '+e.message,'e');
+    return false;
+  }
+}
+
+async function testFirestore(){
+  log('Testing Firestore...','i');
+  const ok = await initFirestore();
+  if(!ok){ document.getElementById('cloudStats').textContent='❌ Failed to connect'; return; }
+  const testOk = await writeToFirestore({
+    test:true, torque:0, device:'TEST', ts: new Date().toISOString()
+  });
+  document.getElementById('cloudStats').innerHTML = testOk
+    ? `✅ Connected to <b style="color:var(--purple)">${G.fsProject}</b><br>Collection: <b>${G.fsCollection}</b><br>Test write: OK`
+    : `❌ Connected but write failed — check Firestore rules`;
+}
+window.testFirestore=testFirestore;
+
+// ══════════════════════════════════════════════════════
+//  ESP32 — WebSocket
+// ══════════════════════════════════════════════════════
+function connectESP(){
+  if(ws){ ws.close(); ws=null; }
+  setESP('mid','Connecting...');
+  log(`WS → ws://${G.espIp}:81`,'i');
+  try{
+    ws=new WebSocket(`ws://${G.espIp}:81`);
+    ws.onopen=()=>{ setESP('on','✓ WS'); log('ESP32 WebSocket connected','o'); };
+    ws.onmessage=(e)=>{
+      try{ const d=JSON.parse(e.data); lastData=d; updateUI(d); }catch{}
+    };
+    ws.onerror=()=>{ setESP('off','WS Error'); };
+    ws.onclose=()=>{
+      setESP('off','Closed');
+      if(running){ setTimeout(connectESP,3000); }
+    };
+  }catch(e){ setESP('off','Failed'); log('WS: '+e.message,'e'); }
+}
+window.connectESP=connectESP;
+
+async function pollHTTP(){
+  if(ws&&ws.readyState===WebSocket.OPEN) return;
+  try{
+    const r=await fetch(`http://${G.espIp}/data`,{signal:AbortSignal.timeout(1500)});
+    const d=await r.json(); lastData=d; updateUI(d);
+    if(document.getElementById('dEsp').className.includes('off')) setESP('on','✓ HTTP');
+  }catch{ if(running) setESP('off','No signal'); }
+}
+
+async function testHTTP(){
+  log(`GET http://${G.espIp}/data`,'i');
+  try{
+    const r=await fetch(`http://${G.espIp}/data`,{signal:AbortSignal.timeout(3000)});
+    const d=await r.json();
+    log(`T=${d.torque} Peak=${d.peak} J#${d.joint_count} ${d.job_state}`,'o');
+    updateUI(d);
+  }catch(e){ log('HTTP failed: '+e.message,'e'); }
+}
+window.testHTTP=testHTTP;
+
+// ══════════════════════════════════════════════════════
+//  UPDATE UI
+// ══════════════════════════════════════════════════════
+const ST_ICONS={IDLE:'⏸ IDLE',ACTIVE:'▶ ACTIVE',DONE:'✅ DONE'};
+const ST_CLS  ={IDLE:'s-IDLE',ACTIVE:'s-ACTIVE',DONE:'s-DONE'};
+
+function updateUI(d){
+  const t=d.torque||0, peak=d.peak||0;
+  const mn=d.min||3276, opt=d.opt||3640, mx=d.max||4005;
+  const state=d.job_state||'IDLE';
+
+  // Gauge value
+  const gv=document.getElementById('gVal');
+  gv.textContent=t>0?t:'—';
+  gv.className='g-val';
+  gv.classList.add(t<=0?'v-idle':t<mn?'v-low':t<=mx?'v-ok':'v-over');
+
+  // Bar
+  const bar=document.getElementById('gBar');
+  bar.style.width=(t>0?Math.min(100,t/(mx*1.08)*100):0)+'%';
+  bar.style.background=t>mx?'var(--red)':t>=opt?'var(--green)':t>=mn?'var(--accent)':'var(--blue)';
+
+  // Zones
+  document.getElementById('zMin').textContent='MIN:'+mn;
+  document.getElementById('zOpt').textContent='OPT:'+opt;
+  document.getElementById('zMax').textContent='MAX:'+mx;
+
+  // Gauge card
+  const gc=document.getElementById('gaugeCard');
+  gc.className='gauge';
+  if(state==='ACTIVE') gc.classList.add(t>mx?'g-over':'g-active');
+  else if(state==='DONE') gc.classList.add('g-done');
+
+  // State badge
+  const sb=document.getElementById('stateBadge');
+  sb.className='state '+(ST_CLS[state]||'s-IDLE');
+  sb.textContent=ST_ICONS[state]||state;
+
+  // Stats
+  document.getElementById('sJoints').textContent=d.joint_count||0;
+  document.getElementById('sPeak').textContent=peak>0?peak:'—';
+
+  // Detect DONE event → record joint
+  if(state==='DONE' && prevState==='ACTIVE'){
+    recordJoint(d.joint_count, peak, mn, opt, mx);
+  }
+  prevState=state;
+
+  // Flash on over-max
+  if(t>mx){ gc.classList.add('flash'); setTimeout(()=>gc.classList.remove('flash'),1200); }
+}
+
+// ══════════════════════════════════════════════════════
+//  JOINT HISTORY
+// ══════════════════════════════════════════════════════
+function recordJoint(num, peak, mn, opt, mx){
+  const grade = peak>mx?'over':peak>=opt?'ok':peak>=mn?'warn':'low';
+  const entry = { num, peak, grade, ts: new Date().toLocaleTimeString('en-GB') };
+  jointHistory.unshift(entry);
+  if(jointHistory.length>50) jointHistory.pop();
+  renderJoints();
+  log(`★ Joint #${num} done — Peak: ${peak} [${grade.toUpperCase()}]`,
+      grade==='over'?'e':grade==='ok'?'o':'w');
+}
+
+function renderJoints(){
+  const el=document.getElementById('jointList');
+  if(!jointHistory.length){
+    el.innerHTML='<div style="text-align:center;padding:24px;color:var(--text3);font-size:12px">No joints yet</div>';
+    return;
+  }
+  el.innerHTML=jointHistory.map(j=>`
+    <div class="jh-row">
+      <div class="jh-num">#${j.num}</div>
+      <div>
+        <div class="jh-peak">${j.peak} <span style="font-size:10px;color:var(--text3)">ft·lb</span></div>
+        <div style="font-size:9px;color:var(--text3)">${j.ts}</div>
+      </div>
+      <div class="jh-state jh-${j.grade}">
+        ${j.grade==='over'?'OVER MAX':j.grade==='ok'?'WITHIN SPEC':j.grade==='warn'?'LOW':'BELOW MIN'}
+      </div>
+    </div>`).join('');
+}
+
+// ══════════════════════════════════════════════════════
+//  PUSH TO TRS SERVER
+// ══════════════════════════════════════════════════════
+async function pushJAM(){
+  if(!running||!lastData) return;
+  if(!G.jamUrl){ setJAM('off','No URL'); return; }
+
+  const body=JSON.stringify({
+    device_code: G.jamDev,
+    job_id:      G.jamJob,
+    torque:      lastData.torque||0,
+    turns:       0, rpm:0,
+    joint_num:   lastData.joint_count,
+    source:      'mobile_bridge_v2',
+  });
+
+  try{
+    const r=await fetch(G.jamUrl+'/api/esp/push',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-ESP-Key':G.jamKey},
+      body, signal:AbortSignal.timeout(4000),
+    });
+    if(r.ok){
+      pushCount++; rateCount++;
+      setJAM('on',`#${pushCount}`);
+      document.getElementById('sPushed').textContent=pushCount;
+      document.getElementById('cPushed').textContent=pushCount;
+    }else{
+      errCount++;
+      setJAM('off',r.status+'');
+      document.getElementById('cErrors').textContent=errCount;
+    }
+  }catch(e){
+    errCount++;
+    setJAM('mid','Retry');
+    document.getElementById('cErrors').textContent=errCount;
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  PUSH TO FIRESTORE DIRECTLY
+// ══════════════════════════════════════════════════════
+async function pushFS(){
+  if(!running||!lastData||!fsEnabled) return;
+  await writeToFirestore({
+    device_code: G.jamDev,
+    job_id:      G.jamJob,
+    torque:      lastData.torque||0,
+    peak:        lastData.peak||0,
+    joint_count: lastData.joint_count||0,
+    job_state:   lastData.job_state||'IDLE',
+    min_t:       lastData.min, opt_t: lastData.opt, max_t: lastData.max,
+    source:      'mobile_bridge_v2',
+    ts:          new Date().toISOString(),
+  });
+}
+
+// ══════════════════════════════════════════════════════
+//  BRIDGE START / STOP
+// ══════════════════════════════════════════════════════
+async function startBridge(){
+  if(running) return;
+  save();
+  running=true;
+  pushCount=0; errCount=0; rateCount=0; fsCount=0;
+  jointHistory=[];
+
+  document.getElementById('btnStart').disabled=true;
+  document.getElementById('btnStop').disabled=false;
+  log(`Bridge started → ESP:${G.espIp} → TRS:${G.jamUrl||'(none)'}`, 'o');
+
+  // Init Firestore if configured
+  if(G.fsApiKey && G.fsProject){
+    await initFirestore();
+  }
+
+  connectESP();
+
+  // HTTP fallback every 800ms
+  const httpTimer=setInterval(()=>{ if(!running){clearInterval(httpTimer);return;} pollHTTP(); },800);
+
+  // Push to TRS every 1s
+  pushTimer=setInterval(()=>{ if(!running){clearInterval(pushTimer);return;} pushJAM(); },1000);
+
+  // Push to Firestore every 2s (saves quota)
+  const fsTimer=setInterval(()=>{ if(!running){clearInterval(fsTimer);return;} pushFS(); },2000);
+
+  // Rate counter every 5s
+  rateTimer=setInterval(()=>{
+    document.getElementById('cRate').textContent=(rateCount/5).toFixed(1);
+    rateCount=0;
+  },5000);
+
+  // Screen wake lock
+  if('wakeLock' in navigator){
+    navigator.wakeLock.request('screen').then(()=>log('Screen wake lock ON','i')).catch(()=>{});
+  }
+}
+
+function stopBridge(){
+  running=false;
+  if(pushTimer) clearInterval(pushTimer);
+  if(rateTimer) clearInterval(rateTimer);
+  if(ws){ ws.close(); ws=null; }
+  document.getElementById('btnStart').disabled=false;
+  document.getElementById('btnStop').disabled=true;
+  setESP('off','Stopped'); setJAM('off','Stopped'); setFS('off','Idle');
+  log('Bridge stopped','w');
+}
+
+window.startBridge=startBridge;
+window.stopBridge=stopBridge;
+
+// ══════════════════════════════════════════════════════
+//  SESSION TIMER
+// ══════════════════════════════════════════════════════
+setInterval(()=>{
+  const s=Math.floor((Date.now()-sessionStart)/1000);
+  const h=String(Math.floor(s/3600)).padStart(2,'0');
+  const m=String(Math.floor(s%3600/60)).padStart(2,'0');
+  const sec=String(s%60).padStart(2,'0');
+  document.getElementById('sessionTimer').textContent=`${h}:${m}:${sec}`;
+},1000);
+
+// ── VISIBILITY CHANGE ──
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden&&running){ connectESP(); }
+});
+
+// ── INIT ──
+log('Ready — connect to TRS-FIELD-001 WiFi → press ▶ Start','i');
+if(!localStorage.getItem('trs_jamUrl')) log('Set TRS URL in ① tab','w');
+if(localStorage.getItem('trs_fsApiKey')) initFirestore();
+</script>
+</body>
+</html>

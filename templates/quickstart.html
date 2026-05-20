@@ -1,0 +1,468 @@
+{% extends "base.html" %}
+{% block title %}Quick Start{% endblock %}
+{% block page_title %}🚀 Quick Start{% endblock %}
+
+{% block extra_head %}
+<style>
+.check-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px 20px;display:flex;align-items:center;gap:14px;transition:border-color .2s}
+.check-card.ok  {border-color:rgba(16,185,129,.35);background:rgba(16,185,129,.04)}
+.check-card.fail{border-color:rgba(239,68,68,.35); background:rgba(239,68,68,.04)}
+.check-card.warn{border-color:rgba(20,184,166,.35);background:rgba(20,184,166,.04)}
+.check-icon{font-size:22px;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.check-icon.ok  {background:rgba(16,185,129,.15)}
+.check-icon.fail{background:rgba(239,68,68,.15)}
+.check-icon.warn{background:rgba(20,184,166,.15)}
+.step-num{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex-shrink:0;background:rgba(20,184,166,.15);color:var(--accent);border:1px solid rgba(20,184,166,.3)}
+.step-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:18px 20px;margin-bottom:10px;transition:border-color .2s}
+.step-card:hover{border-color:var(--border2)}
+.step-title{font-size:14px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:10px}
+.step-body{font-size:13px;color:var(--text2);line-height:1.7}
+.cmd{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:3px 10px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent);display:inline-block;cursor:pointer;transition:background .15s}
+.cmd:hover{background:var(--border)}
+.cmd-block{background:#020a14;border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#a3e635;line-height:1.9;margin:8px 0;position:relative}
+.copy-btn{position:absolute;top:8px;right:8px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-size:10px;color:var(--text3);cursor:pointer;transition:all .15s}
+.copy-btn:hover{color:var(--accent);border-color:var(--accent)}
+.tip{padding:10px 14px;border-radius:8px;background:rgba(59,130,246,.08);border-left:3px solid var(--blue);font-size:12.5px;color:var(--text2);margin-top:8px;line-height:1.6}
+.tip.warn{background:rgba(20,184,166,.08);border-left-color:var(--accent)}
+.tip.ok  {background:rgba(16,185,129,.08);border-left-color:var(--green)}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.pill-green{background:rgba(16,185,129,.15);color:var(--green);border:1px solid rgba(16,185,129,.3)}
+.pill-amber{background:rgba(20,184,166,.15);color:var(--accent);border:1px solid rgba(20,184,166,.3)}
+.pill-red  {background:rgba(239,68,68,.15); color:var(--red);  border:1px solid rgba(239,68,68,.3)}
+.pill-blue {background:rgba(59,130,246,.15);color:var(--blue); border:1px solid rgba(59,130,246,.3)}
+.pill-gray {background:rgba(100,116,139,.15);color:var(--text3);border:1px solid var(--border)}
+</style>
+{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-ghost btn-sm" onclick="location.reload()">🔄 Refresh Status</button>
+<a href="/scada" class="btn btn-primary btn-sm">📡 Open SCADA</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- ══════════════════════════
+     SYSTEM STATUS CHECKS
+════════════════════════════ -->
+<div class="card mb-20">
+  <div class="card-header">
+    <div class="card-title">🔍 System Status</div>
+    <span class="text-muted text-xs">{{ now }}</span>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:8px">
+    {% for c in checks %}
+    <div class="check-card {{ 'ok' if c.ok else 'warn' if c.id in ['fs','cl'] else 'fail' }}">
+      <div class="check-icon {{ 'ok' if c.ok else 'warn' if c.id in ['fs','cl'] else 'fail' }}">
+        {{ '✅' if c.ok else '⚠️' if c.id in ['fs','cl'] else '❌' }}
+      </div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:700">{{ c.label }}</div>
+        <div class="text-muted text-xs">{{ c.detail }}</div>
+      </div>
+      {% if not c.ok and c.id == 'devices' %}
+        <a href="/devices" class="btn btn-primary btn-sm">Add Device →</a>
+      {% elif not c.ok and c.id == 'esp' %}
+        <a href="/scada" class="btn btn-secondary btn-sm">Test Mode →</a>
+      {% elif not c.ok and c.id == 'mtt' %}
+        <a href="/jobs" class="btn btn-secondary btn-sm">Upload MTT →</a>
+      {% elif not c.ok and c.id in ['fs','cl'] %}
+        <span class="pill pill-gray">Optional</span>
+      {% else %}
+        <span class="pill {{ 'pill-green' if c.ok else 'pill-red' }}">
+          {{ '● OK' if c.ok else '✕ Fix needed' }}
+        </span>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- ══════════════════════════
+     3 SCENARIOS
+════════════════════════════ -->
+<div style="font-size:14px;font-weight:700;margin-bottom:12px">
+  🎯 اختار الـ Scenario بتاعك:
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-bottom:20px">
+  <div onclick="showScenario('test')" id="sc-test"
+       style="padding:14px 16px;border-radius:var(--r);border:2px solid var(--accent);background:rgba(20,184,166,.06);cursor:pointer;transition:all .2s">
+    <div style="font-size:16px;margin-bottom:4px">🧪</div>
+    <div style="font-weight:700;margin-bottom:3px">Test & Demo</div>
+    <div class="text-muted text-xs">بدون ESP32 — جرب النظام كامل من المتصفح</div>
+  </div>
+  <div onclick="showScenario('esp')" id="sc-esp"
+       style="padding:14px 16px;border-radius:var(--r);border:1px solid var(--border);background:var(--card);cursor:pointer;transition:all .2s">
+    <div style="font-size:16px;margin-bottom:4px">📡</div>
+    <div style="font-weight:700;margin-bottom:3px">ESP32 Connected</div>
+    <div class="text-muted text-xs">عندك ESP32 متصل بـ MTT — وصّله بـ TRS</div>
+  </div>
+  <div onclick="showScenario('full')" id="sc-full"
+       style="padding:14px 16px;border-radius:var(--r);border:1px solid var(--border);background:var(--card);cursor:pointer;transition:all .2s">
+    <div style="font-size:16px;margin-bottom:4px">🚀</div>
+    <div style="font-weight:700;margin-bottom:3px">Full Production</div>
+    <div class="text-muted text-xs">Cloud + ESP32 + Mobile Bridge — النظام كامل</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════
+     SCENARIO: TEST MODE
+════════════════════════════ -->
+<div id="scenario-test">
+
+  <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:12px">
+    🧪 Scenario 1 — Test Mode (بدون ESP32)
+  </div>
+
+  <!-- Step 1 -->
+  <div class="step-card">
+    <div class="step-title">
+      <div class="step-num">1</div>
+      تأكد إن الـ Server شغال
+    </div>
+    <div class="step-body">
+      لو شايف الصفحة دي، الـ server شغال ✅
+      <div class="tip ok">Server URL: <span class="mono">{{ request.headers.get('host','localhost:8000') }}</span></div>
+    </div>
+  </div>
+
+  <!-- Step 2 -->
+  <div class="step-card">
+    <div class="step-title">
+      <div class="step-num">2</div>
+      أضف Device وJob (لازم يكونوا موجودين)
+    </div>
+    <div class="step-body">
+      {% if device_count == 0 %}
+      <div class="tip warn">⚠️ مفيش devices — لازم تضيف واحد الأول</div>
+      <a href="/devices" class="btn btn-primary btn-sm mt-8" style="width:auto;display:inline-flex">
+        🔧 Add Device →
+      </a>
+      {% else %}
+      <div class="tip ok">✅ عندك {{ device_count }} device(s) — تمام</div>
+      {% endif %}
+
+      {% if job_count == 0 %}
+      <div class="tip warn" style="margin-top:8px">⚠️ مفيش jobs — أنشئ job الأول</div>
+      <a href="/jobs" class="btn btn-primary btn-sm mt-8" style="width:auto;display:inline-flex">
+        🗂️ Create Job →
+      </a>
+      {% else %}
+      <div class="tip ok" style="margin-top:8px">✅ عندك {{ job_count }} job(s) — تمام</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Step 3 -->
+  <div class="step-card">
+    <div class="step-title">
+      <div class="step-num">3</div>
+      افتح SCADA واضغط 🧪 Test Mode
+    </div>
+    <div class="step-body">
+      <ol style="padding-left:18px;line-height:2.2">
+        <li>روح صفحة <a href="/scada" style="color:var(--accent)">SCADA Live</a></li>
+        <li>اضغط زرار <span class="cmd">🧪 Test Mode: OFF</span> — هيتحول لـ ON</li>
+        <li>هتظهر Panel بـ sliders</li>
+        <li>اضغط <span class="cmd">⚡ Send Single Reading</span> — هتشوف الـ gauges تتحرك</li>
+        <li>اضغط <span class="cmd">▶ Start Auto Simulation</span> — هيبدأ يبعت تلقائي</li>
+        <li>اضغط <span class="cmd">🔩 Simulate Full Joint</span> — هيعمل joint كامل</li>
+      </ol>
+      <a href="/scada" class="btn btn-primary mt-8" style="width:auto;display:inline-flex">
+        📡 Open SCADA + Test Mode →
+      </a>
+    </div>
+  </div>
+
+  <!-- Step 4 -->
+  <div class="step-card">
+    <div class="step-title">
+      <div class="step-num">4</div>
+      ارفع MTT PDF وشوف التحليل
+    </div>
+    <div class="step-body">
+      <ol style="padding-left:18px;line-height:2.2">
+        <li>روح <a href="/jobs" style="color:var(--accent)">Jobs</a> → اختار Job</li>
+        <li>في Job Detail — اضغط منطقة Upload واختار MTT PDF أو CSV</li>
+        <li>بعد الـ parse → روح <a href="/analysis" style="color:var(--accent)">Job Analysis</a> وشوف الجرافات</li>
+        <li>اضغط <span class="cmd">🤖 Run AI Analysis</span> في صفحة <a href="/ai" style="color:var(--accent)">AI Insights</a></li>
+        <li>حمّل الـ PDF Report من زرار <span class="cmd">📄 Download Report</span></li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- Step 5 -->
+  <div class="step-card">
+    <div class="step-title">
+      <div class="step-num">5</div>
+      جرّب الـ API مباشرة من المتصفح
+    </div>
+    <div class="step-body">
+      افتح هذه الـ URLs في متصفحك:
+      <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
+        {% set host = request.headers.get('host','localhost:8000') %}
+        <div class="cmd-block">
+GET http://{{ host }}/api/status
+<button class="copy-btn" onclick="copyText('http://{{ host }}/api/status')">Copy</button></div>
+        <div class="cmd-block">
+GET http://{{ host }}/api/jobs
+<button class="copy-btn" onclick="copyText('http://{{ host }}/api/jobs')">Copy</button></div>
+        <div class="cmd-block">
+GET http://{{ host }}/api/devices
+<button class="copy-btn" onclick="copyText('http://{{ host }}/api/devices')">Copy</button></div>
+      </div>
+
+      <div class="tip" style="margin-top:10px">
+        <strong>Test ESP push من curl أو Postman:</strong>
+        <div class="cmd-block" style="margin-top:6px">
+curl -X POST http://{{ host }}/api/esp/push \
+  -H "Content-Type: application/json" \
+  -H "X-ESP-Key: {{ esp_key }}" \
+  -d '{"device_code":"TRS-001","torque":3640,"rpm":4.2,"joint_num":1}'
+<button class="copy-btn" onclick="copyText('curl -X POST http://{{ host }}/api/esp/push -H \"Content-Type: application/json\" -H \"X-ESP-Key: {{ esp_key }}\" -d \'{}\'')">Copy</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end scenario-test -->
+
+
+<!-- ══════════════════════════
+     SCENARIO: ESP32
+════════════════════════════ -->
+<div id="scenario-esp" style="display:none">
+
+  <div style="font-size:13px;font-weight:700;color:var(--blue);margin-bottom:12px">
+    📡 Scenario 2 — ESP32 Connected
+  </div>
+
+  <div class="step-card">
+    <div class="step-title"><div class="step-num">1</div>Flash ESP32 v11</div>
+    <div class="step-body">
+      <ol style="padding-left:18px;line-height:2.2">
+        <li>افتح <span class="cmd">smart_torque_monitor_esp32_v11.ino</span> في Arduino IDE</li>
+        <li>Library Manager → ابحث عن <span class="cmd">WebSockets</span> by Markus Sattler → Install</li>
+        <li>Board: <span class="cmd">ESP32 Dev Module</span></li>
+        <li>Upload → انتظر LCD يعرض:
+          <div class="cmd-block">STA: 192.168.10.70
+AP:  192.168.99.1</div>
+        </li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="step-card">
+    <div class="step-title"><div class="step-num">2</div>وصّل TRS بالـ ESP32</div>
+    <div class="step-body">
+      الـ TRS والـ ESP32 لازم يكونوا على نفس الـ LAN (MTT WiFi):
+      <div class="cmd-block">
+ESP32 STA IP: 192.168.10.70  (MTT network)
+TRS Server:   نفس الشبكة
+TCP Port:     8888  (Python v6 sender)
+
+Test الاتصال:
+GET http://192.168.10.70/data → JSON
+WS  ws://192.168.10.70:81    → real-time</div>
+
+      <div class="tip">
+        شغّل Python v6 على نفس الـ MTT network — هيتصل بـ ESP32 تلقائي على port 8888
+      </div>
+    </div>
+  </div>
+
+  <div class="step-card">
+    <div class="step-title"><div class="step-num">3</div>شوف البيانات Live</div>
+    <div class="step-body">
+      <ol style="padding-left:18px;line-height:2.2">
+        <li>روح <a href="/scada" style="color:var(--accent)">SCADA Live</a></li>
+        <li>اختار الـ device من القائمة</li>
+        <li>الـ gauges هتبدأ تتحرك real-time</li>
+        <li>الـ WebSocket dot لازم يبقى <span style="color:var(--green)">● أخضر</span></li>
+      </ol>
+    </div>
+  </div>
+
+</div><!-- end scenario-esp -->
+
+
+<!-- ══════════════════════════
+     SCENARIO: FULL
+════════════════════════════ -->
+<div id="scenario-full" style="display:none">
+
+  <div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:12px">
+    🚀 Scenario 3 — Full Production Stack
+  </div>
+
+  <!-- Architecture diagram -->
+  <div class="step-card mb-16">
+    <div class="step-title"><div class="step-num">0</div>Architecture</div>
+    <div class="step-body">
+      <div class="cmd-block" style="color:#94a3b8;line-height:2">
+<span style="color:#14b8a6">MTT Device</span>
+    ↓ UDP WiFi
+<span style="color:#14b8a6">ESP32 v11</span>  ←── STA: متصل بشبكة MTT
+    │           └── AP: TRS-FIELD-001 (للموبايل)
+    ↓ TCP:8888
+<span style="color:#3b82f6">Python v6</span>   (على PC متصل بـ MTT)
+    ↓ processes data → sends to ESP32
+
+<span style="color:#10b981">Moبايل</span>      ←── متصل بـ TRS-FIELD-001
+    ↓ WebSocket/HTTP ← يسحب من ESP32
+    ↓ 4G
+<span style="color:#8b5cf6">Render</span>       (TRS Server)
+    ├── Firestore  (persistent DB)
+    └── Cloudinary (PDF storage)
+    ↓ WebSocket
+<span style="color:#14b8a6">Dashboard</span>    (أي browser في العالم)</div>
+    </div>
+  </div>
+
+  <div class="step-card">
+    <div class="step-title"><div class="step-num">1</div>GitHub + Render Deploy</div>
+    <div class="step-body">
+      <div class="cmd-block">
+git init && git add . && git commit -m "TRS v1"
+git remote add origin https://github.com/YOUR/trs-platform.git
+git push -u origin main
+# ثم: render.com → New Web Service → Connect repo</div>
+      <div class="tip">الـ render.yaml جوا المشروع — Render بيقرأه تلقائي</div>
+    </div>
+  </div>
+
+  <div class="step-card">
+    <div class="step-title"><div class="step-num">2</div>Firebase + Cloudinary</div>
+    <div class="step-body">
+      <ol style="padding-left:18px;line-height:2.2">
+        <li>console.firebase.google.com → New Project → Firestore Database</li>
+        <li>Project Settings → Service Accounts → Generate Key → انسخ JSON</li>
+        <li>cloudinary.com → Sign up → انسخ Cloud Name + API Key + Secret</li>
+        <li>Render Dashboard → Environment → ضيف الـ variables</li>
+      </ol>
+      <div class="tip">التفاصيل كاملة في <strong>SETUP.md</strong> جوا الـ ZIP</div>
+    </div>
+  </div>
+
+  <div class="step-card">
+    <div class="step-title"><div class="step-num">3</div>Mobile Bridge</div>
+    <div class="step-body">
+      <ol style="padding-left:18px;line-height:2.2">
+        <li>افتح <span class="cmd">trs_field_bridge_v2.html</span> في Chrome على الموبايل</li>
+        <li>WiFi → اتصل بـ <span class="cmd">TRS-FIELD-001</span> (pass: trs12345)</li>
+        <li>Connect tab → ادخل TRS URL → اضغط ▶ Start</li>
+        <li>Cloud tab → ادخل Firebase credentials → Test</li>
+        <li>الـ 3 dots المفروض يبقوا خضر 🟢🟢🟢</li>
+      </ol>
+    </div>
+  </div>
+
+</div><!-- end scenario-full -->
+
+<!-- API Reference quick card -->
+<div class="card mt-16">
+  <div class="card-title mb-14">📖 API Quick Reference</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:8px;font-size:12px">
+    {% set host = request.headers.get('host','localhost:8000') %}
+    {% for method, path, desc, tag in [
+      ('GET',  '/api/status',              'Health check',               'green'),
+      ('GET',  '/api/jobs',                'List all jobs',              'blue'),
+      ('GET',  '/api/devices',             'List all devices',           'blue'),
+      ('POST', '/api/esp/push',            'ESP32 / Mobile bridge push', 'amber'),
+      ('GET',  '/ws/scada/{channel}',      'WebSocket live stream',      'purple'),
+      ('GET',  '/api/jobs/{id}/report',    'Download PDF report',        'blue'),
+      ('POST', '/api/upload-mtt/{job_id}', 'Upload MTT PDF/CSV',         'amber'),
+      ('POST', '/api/ai/analyze/{job_id}', 'Run AI analysis',            'purple'),
+      ('GET',  '/api/scada/latest',        'Latest SCADA readings',      'blue'),
+      ('GET',  '/api/esp/status',          'ESP32 connectivity check',   'green'),
+    ] %}
+    <div style="padding:8px 10px;background:var(--bg3);border-radius:7px;border:1px solid var(--border);display:flex;align-items:center;gap:8px">
+      <span class="pill pill-{{ 'green' if method=='GET' else 'amber' if method=='POST' else 'blue' }}"
+            style="font-size:9px;min-width:36px;justify-content:center">{{ method }}</span>
+      <div style="min-width:0">
+        <div class="mono" style="font-size:11px;color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ path }}</div>
+        <div style="font-size:10px;color:var(--text3)">{{ desc }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Scenario Switcher ──────────────────────────────────────
+function showScenario(id) {
+  ['test','esp','full'].forEach(s => {
+    document.getElementById('scenario-'+s).style.display = s===id?'block':'none';
+    const card = document.getElementById('sc-'+s);
+    if(s===id){
+      card.style.borderWidth='2px';
+      card.style.borderColor = s==='test'?'var(--accent)':s==='esp'?'var(--blue)':'var(--green)';
+      card.style.background  = s==='test'?'rgba(20,184,166,.06)':s==='esp'?'rgba(59,130,246,.06)':'rgba(16,185,129,.06)';
+    } else {
+      card.style.borderWidth='1px';
+      card.style.borderColor='var(--border)';
+      card.style.background='var(--card)';
+    }
+  });
+}
+
+// ── Copy helper ───────────────────────────────────────────
+function copyText(text){
+  navigator.clipboard.writeText(text)
+    .then(()=>toast('✅ Copied!','success',1500))
+    .catch(()=>{});
+}
+
+// ── Quick Test Button — sends test reading inline ──────────
+async function quickTestPush(){
+  const btn = document.getElementById('btnQuickTest');
+  btn.disabled=true; btn.textContent='⌛ Sending...';
+  try{
+    const r = await fetch('/api/esp/push', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-ESP-Key':'{{ esp_key }}'},
+      body: JSON.stringify({
+        device_code:'QUICKTEST',
+        torque: 3640 + Math.floor(Math.random()*400-200),
+        rpm: 4.2, turns: 3.14, joint_num: 1,
+        source:'quickstart',
+      })
+    });
+    const d = await r.json();
+    btn.textContent = d.ok ? '✅ Test OK — Check SCADA!' : '❌ '+d.error;
+    btn.style.background = d.ok ? 'var(--green)' : 'var(--red)';
+    if(d.ok) toast('✅ Test reading sent — open SCADA to see it!','success',3000);
+  }catch(e){
+    btn.textContent='❌ '+e.message;
+    btn.style.background='var(--red)';
+  }
+  setTimeout(()=>{
+    btn.disabled=false;
+    btn.textContent='⚡ Quick Test Push';
+    btn.style.background='';
+  }, 3000);
+}
+
+// ── Init ──────────────────────────────────────────────────
+showScenario('test');
+
+// Auto-refresh status every 30s
+setInterval(()=>{
+  fetch('/api/status').then(r=>r.json()).then(d=>{
+    if(d.status==='ok') toast('✅ Server healthy','success',1500);
+  }).catch(()=>{});
+}, 30000);
+</script>
+
+<!-- Quick Test button floating -->
+<div style="position:fixed;bottom:24px;right:24px;z-index:200">
+  <button id="btnQuickTest" class="btn btn-primary"
+          onclick="quickTestPush()"
+          style="padding:12px 20px;border-radius:30px;box-shadow:0 4px 20px rgba(20,184,166,.3);font-size:14px">
+    ⚡ Quick Test Push
+  </button>
+</div>
+{% endblock %}

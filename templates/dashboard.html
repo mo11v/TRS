@@ -1,0 +1,696 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}
+  {% if user.role == 'Admin' %}⚙️ Admin Dashboard
+  {% elif user.role == 'Manager' %}📊 Operations Dashboard
+  {% elif user.role == 'Engineer' %}🔬 Engineering Dashboard
+  {% elif user.role == 'Supervisor' %}🧭 Supervisor Dashboard
+  {% else %}🔧 Operator Performance Panel
+  {% endif %}
+{% endblock %}
+
+{% block topbar_actions %}
+<span class="text-muted text-sm">{{ now }}</span>
+{% if 'jobs.create' in perms %}
+<button class="btn btn-primary btn-sm" onclick="openModal('newJobModal')">➕ New Job</button>
+{% endif %}
+{% endblock %}
+
+{% block extra_head %}
+<style>
+.welcome-bar{background:linear-gradient(135deg,var(--bg2),var(--bg3));border:1px solid var(--border);border-radius:var(--r);padding:18px 24px;margin-bottom:20px;display:flex;align-items:center;gap:16px;position:relative;overflow:hidden}
+.welcome-bar::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),transparent 60%)}
+.welcome-avatar{width:48px;height:48px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:#000;flex-shrink:0}
+.insight-card{padding:12px 14px;border-radius:8px;display:flex;align-items:flex-start;gap:10px;font-size:13px;margin-bottom:8px}
+.insight-card.critical{background:rgba(239,68,68,.08);border-left:3px solid var(--red)}
+.insight-card.warning{background:rgba(20,184,166,.08);border-left:3px solid var(--accent)}
+.insight-card.success{background:rgba(16,185,129,.08);border-left:3px solid var(--green)}
+.insight-card.info{background:rgba(59,130,246,.08);border-left:3px solid var(--blue)}
+.activity-item{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)}
+.activity-item:last-child{border-bottom:none}
+.activity-dot{width:28px;height:28px;background:var(--bg3);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
+.job-link{text-decoration:none;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--card);display:block;transition:border-color .15s;margin-bottom:6px}
+.job-link:hover{border-color:var(--accent)}
+
+.trs-hero{position:relative;overflow:hidden;border:1px solid rgba(20,184,166,.28);border-radius:16px;padding:24px;background:radial-gradient(circle at top left,rgba(20,184,166,.14),transparent 35%),linear-gradient(135deg,rgba(15,31,53,.95),rgba(5,13,26,.95));display:flex;justify-content:space-between;gap:20px;align-items:center;box-shadow:var(--shadow)}
+.trs-hero h2{font-size:26px;line-height:1.2;margin:4px 0 6px}.trs-hero p{color:var(--text2);max-width:720px}.trs-kicker{font-size:10px;letter-spacing:2px;color:var(--accent);font-weight:800}.trs-status{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:999px;border:1px solid rgba(16,185,129,.35);color:var(--green);background:rgba(16,185,129,.08);font-size:12px;font-weight:700;white-space:nowrap}.live-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 12px var(--green)}
+.trs-module-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.trs-module-card{text-decoration:none;color:var(--text);border:1px solid var(--border);border-radius:14px;padding:16px;background:var(--card);display:flex;gap:12px;align-items:center;transition:.18s}.trs-module-card:hover{transform:translateY(-2px);border-color:var(--accent);background:var(--card-hover)}.trs-module-card strong{display:block;font-size:15px}.trs-module-card span{display:block;color:var(--text2);font-size:12px;margin-top:2px}.module-icon{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:var(--bg3);font-size:20px}.trs-module-card.amber .module-icon{background:rgba(20,184,166,.12)}.trs-module-card.blue .module-icon{background:rgba(59,130,246,.12)}.trs-module-card.green .module-icon{background:rgba(16,185,129,.12)}@media(max-width:900px){.trs-hero{flex-direction:column;align-items:flex-start}.trs-module-grid{grid-template-columns:1fr}}
+
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Welcome Bar -->
+<div class="welcome-bar">
+  <div class="welcome-avatar">{{ (user.full_name or user.username)[0]|upper }}</div>
+  <div style="flex:1">
+    <div style="font-size:16px;font-weight:700">Welcome, {{ user.full_name or user.username }}</div>
+    <div class="text-muted" style="font-size:12px;margin-top:2px">{{ now }}</div><div class="text-muted text-sm" style="margin-top:6px">{{ role_summary }}</div>
+  </div>
+  <span class="badge
+    {% if user.role=='Admin' %}badge-purple
+    {% elif user.role=='Manager' %}badge-blue
+    {% elif user.role=='Engineer' %}badge-green
+    {% elif user.role=='Supervisor' %}badge-amber
+    {% else %}badge-cyan{% endif %}">
+    {{ user.role }}
+  </span>
+</div>
+
+<!-- TRS Command Center -->
+<div class="trs-hero mb-20">
+  <div>
+    <div class="trs-kicker">TRS PLATFORM · OPERATIONS COMMAND CENTER</div>
+    <h2>TRS Platform Command Center</h2>
+    <p>One web app for torque analysis, company job folders, real-time shared files, and equipment service tracking.</p>
+  </div>
+  <div class="trs-status">
+    <span class="live-dot"></span>
+    <span>Realtime channels armed</span>
+  </div>
+</div>
+
+<div class="trs-module-grid mb-20">
+  <a class="trs-module-card amber" href="/analysis">
+    <div class="module-icon">📈</div>
+    <div><strong>Torque Analysis</strong><span>Torque / Turn reports and MTT analysis</span></div>
+  </a>
+  <a class="trs-module-card blue" href="/job-files">
+    <div class="module-icon">📁</div>
+    <div><strong>Job Files</strong><span>Khalda / AGIBA / Simetar folders</span></div>
+  </a>
+  <a class="trs-module-card green" href="/equipment-maintenance">
+    <div class="module-icon">🛠️</div>
+    <div><strong>Equipment</strong><span>HPU files, maintenance logs, alerts</span></div>
+  </a>
+</div>
+
+
+{% if user.role in ['Operator', 'Operator'] %}
+<div class="card mb-20" style="border-color:rgba(20,184,166,.32);background:linear-gradient(135deg,rgba(20,184,166,.08),rgba(59,130,246,.04))">
+  <div class="card-header">
+    <div class="card-title">🎯 My Operator Performance</div>
+    <span class="badge {% if operator_panel.score >= 85 %}badge-green{% elif operator_panel.score >= 70 %}badge-amber{% else %}badge-red{% endif %}">Score {{ operator_panel.score }}/100</span>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card cyan"><span class="stat-icon">🗂️</span><div class="stat-value">{{ operator_panel.total_jobs }}</div><div class="stat-label">My Jobs</div></div>
+    <div class="stat-card green"><span class="stat-icon">🔬</span><div class="stat-value">{{ operator_panel.analyzed_jobs }}</div><div class="stat-label">Analyzed</div></div>
+    <div class="stat-card blue"><span class="stat-icon">📁</span><div class="stat-value">{{ operator_panel.uploaded_files }}</div><div class="stat-label">My Uploads</div></div>
+    <div class="stat-card amber"><span class="stat-icon">↻</span><div class="stat-value">{{ operator_panel.avg_rerun }}</div><div class="stat-label">Avg Rerun %</div></div>
+  </div>
+
+  <div class="grid-2" style="align-items:start">
+    <div>
+      <h4 class="mb-8">My recent jobs</h4>
+      {% for j in operator_panel.jobs %}
+      <a class="job-link" href="/jobs/{{ j.id }}">
+        <div style="display:flex;justify-content:space-between;gap:10px"><strong>{{ j.job_number }}</strong><span class="badge badge-blue">{{ j.status }}</span></div>
+        <div class="text-muted text-xs">{{ j.customer or '—' }} · {{ j.rig or '—' }} · {{ j.well or '—' }}</div>
+        <div class="text-xs text-muted">Joints: {{ j.total_joints or '—' }} · Rerun: {{ j.rerun_rate if j.rerun_rate is not none else '—' }}%</div>
+      </a>
+      {% else %}
+      <div class="empty-box">No jobs assigned/created by you yet.</div>
+      {% endfor %}
+    </div>
+
+    <div>
+      <h4 class="mb-8">My uploaded reports</h4>
+      {% for f in operator_panel.uploads %}
+      <a class="job-link" href="/job-files/{{ f.id }}">
+        <strong>{{ f.original_name }}</strong>
+        <div class="text-muted text-xs">{{ f.company }}/{{ f.job_year }}/{{ f.job_month }}/{{ f.rig }}/{{ f.connection_name }}</div>
+        <div class="text-xs text-muted">Confidence: {{ f.detection_confidence or 0 }}% · {{ f.created_at[:16] }}</div>
+      </a>
+      {% else %}
+      <div class="empty-box">No uploaded reports yet.</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if user.role == 'Supervisor' %}
+<div class="card mb-20">
+  <div class="card-header"><div class="card-title">🧭 Supervisor Workspace</div><span class="badge badge-amber">Field control</span></div>
+  <div class="grid-3">
+    <a class="job-link" href="/jobs"><strong>Team Jobs</strong><div class="text-muted text-xs">Review active and recent jobs</div></a>
+    <a class="job-link" href="/job-files"><strong>Job Reports</strong><div class="text-muted text-xs">Upload and review classified reports</div></a>
+    <a class="job-link" href="/equipment-maintenance"><strong>Equipment Status</strong><div class="text-muted text-xs">Follow maintenance and availability</div></a>
+  </div>
+</div>
+{% endif %}
+
+<div class="grid-2 mb-20" style="align-items:start">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">📁 Latest Job Files</div>
+      <a href="/job-files" class="btn btn-ghost btn-sm">Open →</a>
+    </div>
+    {% for f in recent_job_files %}
+    <div class="activity-item">
+      <div class="activity-dot">{% if f.file_type=='pdf' %}📕{% elif f.file_type in ['xlsx','xls','csv'] %}📊{% else %}📄{% endif %}</div>
+      <div style="min-width:0">
+        <div style="font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.original_name }}</div>
+        <div class="text-muted text-xs">{{ f.company }}/{{ f.job_year }}/{{ f.job_month }}/{{ f.rig }}/{{ f.connection_name }} · {{ f.created_at[:16] }}</div>
+      </div>
+    </div>
+    {% else %}
+    <div class="text-muted text-sm" style="padding:16px;text-align:center">No shared job files yet</div>
+    {% endfor %}
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">🚨 Equipment Alerts</div>
+      <a href="/equipment-maintenance" class="btn btn-ghost btn-sm">Open →</a>
+    </div>
+    {% for e in equipment_alerts %}
+    <a class="job-link" href="/equipment-maintenance/{{ e.id }}">
+      <div style="display:flex;justify-content:space-between;gap:8px">
+        <strong>{{ e.name }}</strong>
+        <span class="badge {% if e.service_state=='OVERDUE' %}badge-red{% else %}badge-amber{% endif %}">{{ e.service_state }}</span>
+      </div>
+      <div class="text-muted text-xs">{{ e.category }} · {{ e.serial_no }} · next {{ e.next_service_date }}</div>
+    </a>
+    {% else %}
+    <div class="text-muted text-sm" style="padding:16px;text-align:center">No due maintenance alerts</div>
+    {% endfor %}
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════
+     ADMIN / MANAGER
+════════════════════════════════════════════ -->
+{% if user.role in ['Admin', 'Manager'] %}
+
+<div class="stats-grid mb-20">
+  <div class="stat-card amber">
+    <span class="stat-icon">🗂️</span>
+    <div class="stat-value">{{ total_jobs }}</div>
+    <div class="stat-label">Total Jobs</div>
+  </div>
+  <div class="stat-card green">
+    <span class="stat-icon">▶️</span>
+    <div class="stat-value">{{ active_jobs }}</div>
+    <div class="stat-label">Active Jobs</div>
+  </div>
+  <div class="stat-card blue">
+    <span class="stat-icon">🔧</span>
+    <div class="stat-value">{{ total_devices }}</div>
+    <div class="stat-label">Devices</div>
+  </div>
+  <div class="stat-card cyan">
+    <span class="stat-icon">✅</span>
+    <div class="stat-value">{{ avail_devices }}</div>
+    <div class="stat-label">Available</div>
+  </div>
+  <div class="stat-card purple">
+    <span class="stat-icon">🔩</span>
+    <div class="stat-value">{{ "{:,}".format(total_joints|int) }}</div>
+    <div class="stat-label">Total Joints</div>
+  </div>
+  <div class="stat-card blue">
+    <span class="stat-icon">📁</span>
+    <div class="stat-value">{{ job_file_count }}</div>
+    <div class="stat-label">Job Files</div>
+  </div>
+  <div class="stat-card red">
+    <span class="stat-icon">🚨</span>
+    <div class="stat-value">{{ trs_equipment_overdue }}</div>
+    <div class="stat-label">Maint. Overdue</div>
+  </div>
+  {% if user.role == 'Admin' %}
+  <div class="stat-card red">
+    <span class="stat-icon">👥</span>
+    <div class="stat-value">{{ total_users }}</div>
+    <div class="stat-label">Users</div>
+  </div>
+  {% else %}
+  <div class="stat-card amber">
+    <span class="stat-icon">🔬</span>
+    <div class="stat-value">{{ analyzed_jobs }}</div>
+    <div class="stat-label">Analyzed Jobs</div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="grid-2 mb-20" style="align-items:start">
+  <!-- Jobs Table -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">🗂️ Recent Jobs</div>
+      <a href="/jobs" class="btn btn-ghost btn-sm">All Jobs →</a>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Job #</th><th>Customer</th><th>Joints</th><th>FT Mean</th><th>Rerun%</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          {% for j in recent_jobs %}
+          <tr onclick="location.href='/jobs/{{ j.id }}'" style="cursor:pointer">
+            <td class="mono text-accent fw-bold">{{ j.job_number }}</td>
+            <td>
+              <div style="font-weight:500">{{ j.customer or '—' }}</div>
+              <div class="text-muted text-xs">{{ j.rig or '' }}</div>
+            </td>
+            <td>{% if j.total_joints %}<span class="mono">{{ j.total_joints }}</span>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+            <td>{% if j.ft_mean %}<span class="mono text-accent">{{ "%.0f"|format(j.ft_mean) }}</span>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+            <td>
+              {% if j.rerun_rate is not none %}
+              <span class="{{ 'text-red fw-bold' if j.rerun_rate>10 else 'text-accent' if j.rerun_rate>5 else 'text-green' }}">
+                {{ "%.1f"|format(j.rerun_rate) }}%
+              </span>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td>
+              <span class="badge {% if j.status=='Active' %}badge-green{% elif j.status=='Completed' %}badge-blue{% elif j.status=='Planned' %}badge-amber{% elif j.status=='Cancelled' %}badge-red{% else %}badge-gray{% endif %}">{{ j.status }}</span>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" style="text-align:center;padding:28px;color:var(--text3)">No jobs yet — create your first job</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Right column -->
+  <div style="display:flex;flex-direction:column;gap:16px">
+    {% if fleet_chart %}
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">📈 Fleet Torque</div>
+        <a href="/fleet" class="btn btn-ghost btn-sm">Fleet →</a>
+      </div>
+      <canvas id="fleetChart" height="160"></canvas>
+    </div>
+    {% endif %}
+
+    {% if fleet_health %}
+    <div class="card">
+      <div class="card-title mb-12">🏥 Fleet Health</div>
+      {% for ins in fleet_health[:4] %}
+      <div class="insight-card {{ ins.type }}">
+        <span style="font-size:16px;flex-shrink:0">{{ ins.icon }}</span>
+        <div>
+          <div style="font-weight:600;font-size:12.5px">{{ ins.title }}</div>
+          <div class="text-muted text-xs">{{ ins.detail }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if user.role == 'Admin' and activity %}
+    <div class="card">
+      <div class="card-title mb-12">🕒 Activity Log</div>
+      {% for a in activity[:8] %}
+      <div class="activity-item">
+        <div class="activity-dot">
+          {% if a.action=='mtt_upload' %}📄
+          {% elif a.action=='job_create' %}🗂️
+          {% elif a.action=='login' %}🔐
+          {% elif a.action=='ai_analyze' %}🤖
+          {% else %}⚡{% endif %}
+        </div>
+        <div>
+          <div style="font-size:12.5px;font-weight:500">{{ a.detail or a.action }}</div>
+          <div class="text-muted text-xs">{{ a.username or 'system' }} · {{ a.created_at[:16] }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="card">
+      <div class="card-title mb-12">⚡ Quick Actions</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <button class="btn btn-primary" onclick="openModal('newJobModal')">➕ New Job</button>
+        <a href="/analysis" class="btn btn-blue">🔬 Job Analysis</a>
+        <a href="/job-files" class="btn btn-secondary">📁 Job Files</a>
+        <a href="/equipment-maintenance" class="btn btn-secondary">🛠️ Equipment Maintenance</a>
+        <a href="/fleet" class="btn btn-secondary">🚀 Fleet View</a>
+        <a href="/ai" class="btn btn-ghost">🤖 AI Insights</a>
+        <a href="/scada" class="btn btn-ghost">📡 SCADA Live</a>
+        {% if user.role == 'Admin' %}<a href="/users" class="btn btn-ghost">👥 Manage Users</a>{% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════
+     ENGINEER
+════════════════════════════════════════════ -->
+{% elif user.role == 'Engineer' %}
+
+<div class="stats-grid mb-20">
+  <div class="stat-card amber">
+    <span class="stat-icon">🗂️</span>
+    <div class="stat-value">{{ total_jobs }}</div>
+    <div class="stat-label">Total Jobs</div>
+  </div>
+  <div class="stat-card green">
+    <span class="stat-icon">▶️</span>
+    <div class="stat-value">{{ active_jobs }}</div>
+    <div class="stat-label">Active</div>
+  </div>
+  <div class="stat-card purple">
+    <span class="stat-icon">🔩</span>
+    <div class="stat-value">{{ "{:,}".format(total_joints|int) }}</div>
+    <div class="stat-label">Joints Analyzed</div>
+  </div>
+  <div class="stat-card blue">
+    <span class="stat-icon">🔬</span>
+    <div class="stat-value">{{ analyzed_jobs }}</div>
+    <div class="stat-label">Jobs with MTT</div>
+  </div>
+</div>
+
+<div class="grid-2 mb-20" style="align-items:start">
+  <div style="display:flex;flex-direction:column;gap:16px">
+    {% if fleet_chart %}
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">📈 Torque Results</div>
+        <a href="/fleet" class="btn btn-ghost btn-sm">Fleet →</a>
+      </div>
+      <canvas id="fleetChart" height="170"></canvas>
+    </div>
+    {% endif %}
+
+    {% if fleet_health %}
+    <div class="card">
+      <div class="card-title mb-12">🔍 Analysis Alerts</div>
+      {% for ins in fleet_health %}
+      <div class="insight-card {{ ins.type }}">
+        <span style="font-size:16px;flex-shrink:0">{{ ins.icon }}</span>
+        <div>
+          <div style="font-weight:600;font-size:12.5px">{{ ins.title }}</div>
+          <div class="text-muted text-xs">{{ ins.detail }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:16px">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">📊 Recent Analysis</div>
+        <a href="/analysis" class="btn btn-ghost btn-sm">All →</a>
+      </div>
+      {% for j in recent_jobs %}
+      <a href="/analysis?job_id={{ j.id }}" class="job-link">
+        <div style="display:flex;align-items:center;gap:8px;justify-content:space-between">
+          <span class="mono text-accent fw-bold">{{ j.job_number }}</span>
+          {% if j.total_joints %}<span class="badge badge-cyan">{{ j.total_joints }}j</span>{% endif %}
+        </div>
+        <div style="display:flex;gap:12px;margin-top:4px;font-size:12px">
+          <span class="text-muted">{{ j.customer or '—' }}</span>
+          {% if j.ft_mean %}<span class="mono text-accent">{{ "%.0f"|format(j.ft_mean) }} ft·lb</span>{% endif %}
+          {% if j.rerun_rate is not none %}
+          <span class="{{ 'text-red' if j.rerun_rate>10 else 'text-green' }}">{{ "%.1f"|format(j.rerun_rate) }}% rerun</span>
+          {% endif %}
+        </div>
+      </a>
+      {% else %}
+      <div class="text-muted text-sm" style="padding:16px;text-align:center">No MTT data yet</div>
+      {% endfor %}
+    </div>
+
+    <div class="card">
+      <div class="card-title mb-12">⚡ Quick Actions</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <a href="/jobs" class="btn btn-primary">🗂️ Jobs</a>
+        <a href="/analysis" class="btn btn-blue">🔬 Analysis</a>
+        <a href="/fleet" class="btn btn-secondary">🚀 Fleet</a>
+        <a href="/ai" class="btn btn-ghost">🤖 AI Insights</a>
+        <a href="/scada" class="btn btn-ghost">📡 SCADA</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════
+     FIELD OPERATOR
+════════════════════════════════════════════ -->
+{% else %}
+
+<div class="stats-grid mb-20" style="grid-template-columns:repeat(3,1fr)">
+  <div class="stat-card green">
+    <span class="stat-icon">▶️</span>
+    <div class="stat-value">{{ active_jobs }}</div>
+    <div class="stat-label">Active Jobs</div>
+  </div>
+  <div class="stat-card blue">
+    <span class="stat-icon">🔧</span>
+    <div class="stat-value">{{ avail_devices }}</div>
+    <div class="stat-label">Available Units</div>
+  </div>
+  <div class="stat-card amber">
+    <span class="stat-icon">🔩</span>
+    <div class="stat-value">{{ "{:,}".format(total_joints|int) }}</div>
+    <div class="stat-label">Joints Analyzed</div>
+  </div>
+</div>
+
+<div class="grid-2 mb-20" style="align-items:start">
+  <!-- Jobs -->
+  <div style="display:flex;flex-direction:column;gap:16px">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">🗂️ Active Jobs</div>
+        <a href="/jobs" class="btn btn-ghost btn-sm">All →</a>
+      </div>
+      {% set active_list = recent_jobs | selectattr('status', 'equalto', 'Active') | list %}
+      {% for j in active_list %}
+      <a href="/jobs/{{ j.id }}" class="job-link">
+        <div style="display:flex;align-items:center;gap:8px;justify-content:space-between">
+          <div class="d-flex gap-8 align-center">
+            <span class="badge badge-green" style="font-size:9px">ACTIVE</span>
+            <span class="mono text-accent fw-bold">{{ j.job_number }}</span>
+          </div>
+          {% if j.device_code %}<span class="badge badge-blue">{{ j.device_code }}</span>{% endif %}
+        </div>
+        <div class="text-muted text-xs" style="margin-top:4px">
+          {{ j.customer or '' }}{% if j.rig %} · {{ j.rig }}{% endif %}
+        </div>
+        {% if j.total_joints %}
+        <div style="font-size:12px;margin-top:6px;display:flex;gap:12px">
+          <span class="text-muted">Joints:</span><span class="mono">{{ j.total_joints }}</span>
+          {% if j.ft_mean %}<span class="text-muted">FT:</span><span class="mono text-accent">{{ "%.0f"|format(j.ft_mean) }}</span>{% endif %}
+          {% if j.rerun_rate is not none %}
+          <span class="{{ 'text-red' if j.rerun_rate>10 else 'text-green' }}">{{ "%.1f"|format(j.rerun_rate) }}% rerun</span>
+          {% endif %}
+        </div>
+        {% endif %}
+      </a>
+      {% else %}
+      <div style="text-align:center;padding:24px;color:var(--text3)">
+        <div style="font-size:28px;margin-bottom:8px">📭</div>
+        <div>No active jobs right now</div>
+      </div>
+      {% endfor %}
+
+      {% set planned = recent_jobs | selectattr('status', 'equalto', 'Planned') | list %}
+      {% if planned %}
+      <div class="divider"></div>
+      <div class="text-muted text-xs mb-8" style="text-transform:uppercase;letter-spacing:.5px">Planned</div>
+      {% for j in planned[:3] %}
+      <a href="/jobs/{{ j.id }}" class="job-link">
+        <div class="d-flex gap-8 align-center">
+          <span class="badge badge-amber" style="font-size:9px">PLANNED</span>
+          <span class="mono text-accent fw-bold">{{ j.job_number }}</span>
+        </div>
+        <div class="text-muted text-xs mt-4">{{ j.customer or '' }} · {{ j.rig or '' }}</div>
+      </a>
+      {% endfor %}
+      {% endif %}
+    </div>
+
+    <!-- Fleet overview (read-only) -->
+    {% if fleet_chart %}
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">📊 Fleet Overview</div>
+        <a href="/fleet" class="btn btn-ghost btn-sm">View →</a>
+      </div>
+      <canvas id="fleetChart" height="150"></canvas>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Right column -->
+  <div style="display:flex;flex-direction:column;gap:16px">
+    <!-- Upload MTT card -->
+    <div class="card" style="border-color:rgba(20,184,166,.3);background:rgba(20,184,166,.04)">
+      <div class="card-title mb-8">📄 Upload MTT Report</div>
+      <p class="text-muted" style="font-size:12.5px;margin-bottom:14px;line-height:1.6">
+        Upload MTT PDF or CSV to a job to start analysis. Select the job first.
+      </p>
+      <a href="/jobs?status=Active" class="btn btn-primary" style="width:100%;justify-content:center">
+        🗂️ Select Job to Upload →
+      </a>
+    </div>
+
+    <!-- SCADA Live card -->
+    <div class="card" style="border-color:rgba(6,182,212,.3);background:rgba(6,182,212,.04)">
+      <div class="card-title mb-8">📡 SCADA Live</div>
+      <p class="text-muted" style="font-size:12.5px;margin-bottom:14px;line-height:1.6">
+        Monitor live torque, RPM, and pressure readings from field devices.
+      </p>
+      <a href="/scada" class="btn btn-blue" style="width:100%;justify-content:center">
+        📡 Open SCADA Monitor →
+      </a>
+    </div>
+
+    <!-- Analysis (view-only) -->
+    <div class="card">
+      <div class="card-title mb-8">🔬 Job Analysis</div>
+      <p class="text-muted" style="font-size:12.5px;margin-bottom:14px;line-height:1.6">
+        View torque/turn analysis charts and joint data for any job.
+      </p>
+      <a href="/analysis" class="btn btn-secondary" style="width:100%;justify-content:center">
+        View Analysis →
+      </a>
+    </div>
+
+    <!-- Fleet alert summary -->
+    {% if fleet_health %}
+    <div class="card">
+      <div class="card-title mb-12">⚠️ Fleet Status</div>
+      {% for ins in fleet_health %}
+      <div class="insight-card {{ ins.type }}">
+        <span style="font-size:15px;flex-shrink:0">{{ ins.icon }}</span>
+        <div>
+          <div style="font-weight:600;font-size:12.5px">{{ ins.title }}</div>
+          <div class="text-muted text-xs">{{ ins.detail }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endif %}
+
+<!-- New Job Modal (engineers and above) -->
+{% if 'jobs.create' in perms %}
+<div class="modal-overlay" id="newJobModal">
+  <div class="modal" style="width:min(700px,95vw)">
+    <div class="modal-header">
+      <div class="modal-title">➕ Create New Job</div>
+      <button class="modal-close" onclick="closeModal('newJobModal')">×</button>
+    </div>
+    <form method="post" action="/jobs/create">
+      <div class="modal-body">
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Job Number *</label>
+            <input type="text" name="job_number" class="form-control" placeholder="TRS-2024-001" required autofocus>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Status</label>
+            <select name="status" class="form-control">
+              <option value="Planned">Planned</option>
+              <option value="Active">Active</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Customer</label>
+            <input type="text" name="customer" class="form-control" placeholder="Customer / Company">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Rig</label>
+            <input type="text" name="rig" class="form-control" placeholder="Rig name">
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Well</label>
+            <input type="text" name="well" class="form-control" placeholder="Well name / ID">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Field</label>
+            <input type="text" name="field" class="form-control" placeholder="Field / Block">
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Country</label>
+            <input type="text" name="country" class="form-control">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Start Date</label>
+            <input type="date" name="start_date" class="form-control">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Assign Device</label>
+          <select name="device_id" class="form-control">
+            <option value="">— No device assigned yet —</option>
+            {% for d in devices %}
+            <option value="{{ d.id }}">{{ d.code }} — {{ d.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea name="notes" class="form-control" placeholder="Job notes, special instructions..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('newJobModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create Job →</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+{% if fleet_chart %}
+const fd = {{ fleet_chart|tojson }};
+const fc = document.getElementById('fleetChart');
+if (fc && fd.length > 0) {
+  new Chart(fc, {
+    type: 'bar',
+    data: {
+      labels: fd.map(d => d.job_number),
+      datasets: [
+        { label: 'FT Mean (ft·lb)', data: fd.map(d => d.ft_mean),
+          backgroundColor: 'rgba(20,184,166,0.65)', borderColor: '#14b8a6',
+          borderWidth: 1, borderRadius: 4 },
+        { label: 'Rerun %', data: fd.map(d => d.rerun_rate),
+          backgroundColor: 'rgba(239,68,68,0.5)', borderColor: '#ef4444',
+          borderWidth: 1, borderRadius: 4, yAxisID: 'y2' }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#94a3b8', font: { size: 10 } } } },
+      scales: {
+        x: { ticks: { color: '#64748b', font: { size: 10 }, maxRotation: 30 }, grid: { color: 'rgba(30,48,80,.5)' } },
+        y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: 'rgba(30,48,80,.5)' } },
+        y2: { position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#ef4444', font: { size: 10 } } }
+      }
+    }
+  });
+}
+{% endif %}
+</script>
+{% endblock %}

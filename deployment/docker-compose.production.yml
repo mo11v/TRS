@@ -1,0 +1,23 @@
+services:
+  trs-platform:
+    build: ..
+    container_name: trs-platform
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      TRS_SECRET_KEY: ${TRS_SECRET_KEY:-change-me}
+      TRS_ADMIN_PASS: ${TRS_ADMIN_PASS:-admin123}
+      TRS_DB_PATH: /data/trs_platform.db
+      TRS_UPLOADS: /data/uploads
+      TRS_REPORTS: /data/reports
+      TRS_SESSION_HOURS: 12
+    volumes:
+      - trs_data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+volumes:
+  trs_data:

@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% block title %}{{ eq.name }}{% endblock %}
+{% block page_title %}🛠️ {{ eq.name }}{% endblock %}
+{% block topbar_actions %}
+{% if eq.source_file_path %}<a class="btn btn-secondary btn-sm" href="/equipment-maintenance/{{ eq.id }}/source">⬇ Original XLSX</a>{% endif %}
+<a class="btn btn-secondary btn-sm" href="/equipment-maintenance/{{ eq.id }}/sheet/export.xlsx">⬇ Live Excel</a>
+<a class="btn btn-secondary btn-sm" href="/equipment-maintenance">← Equipment</a>
+<button class="btn btn-primary btn-sm" onclick="openModal('logModal')">➕ Add Log</button>
+{% if user_role in ['Admin','Manager'] %}<form method="post" action="/equipment-maintenance/{{ eq.id }}/delete" style="display:inline" onsubmit="return confirm('Delete this equipment and all logs?')"><button class="btn btn-red btn-sm" type="submit">Delete</button></form>{% endif %}
+{% endblock %}
+{% block extra_head %}
+<style>
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.form-grid label{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px}.form-grid input,.form-grid textarea,.form-grid select{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:9px 10px;margin-top:5px}@media(max-width:900px){.form-grid{grid-template-columns:1fr}}
+.equipment-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}.equipment-grid .card{min-width:0}.sheet-launch-card{margin-top:18px;background:linear-gradient(135deg,rgba(20,184,166,.08),rgba(59,130,246,.06));border-color:rgba(20,184,166,.28)}.sheet-shell{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#07111f;max-width:100%}.sheet-toolbar{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.025);flex-wrap:wrap}.sheet-status{font-size:12px;color:var(--text3)}.sheet-wrap{overflow:auto;max-height:70vh;max-width:100%}.sheet-table{border-collapse:collapse;width:max-content;min-width:100%;font-size:12px}.sheet-table th{position:sticky;top:0;z-index:2;background:#0f1f35;color:#8fb4df;border:1px solid #243a5a;padding:6px;min-width:120px;text-align:center}.sheet-table th.row-h{left:0;z-index:3;min-width:46px;width:46px}.sheet-table td.row-num{position:sticky;left:0;background:#0f1f35;color:#8fb4df;text-align:center;border:1px solid #243a5a;font-family:'JetBrains Mono',monospace}.sheet-cell{min-width:120px;height:34px;border:1px solid #1e3050;padding:6px 8px;background:#050d1a;color:#e2e8f0;outline:none;white-space:pre-wrap}.sheet-cell:focus{background:#092038;box-shadow:inset 0 0 0 2px var(--accent)}.sheet-cell.dirty{background:rgba(20,184,166,.12)}.sheet-cell.saved{animation:savedFlash 900ms ease}@keyframes savedFlash{0%{background:rgba(16,185,129,.28)}100%{background:#050d1a}}.pill-live{display:inline-flex;gap:6px;align-items:center}.pill-dot{width:8px;height:8px;border-radius:999px;background:var(--green);box-shadow:0 0 10px var(--green)}.sheet-modal{max-width:96vw;width:96vw;height:88vh;display:flex;flex-direction:column}.sheet-modal .modal-body{flex:1;min-height:0;overflow:hidden}.sheet-modal .sheet-shell{height:100%;display:flex;flex-direction:column}.sheet-modal .sheet-wrap{flex:1;max-height:none}.source-note{font-size:12px;color:var(--text3);line-height:1.6;margin-top:8px}.excel-preview-table{border-collapse:collapse;width:max-content;min-width:100%;background:#fff;color:#111;font-family:Calibri,Arial,sans-serif;font-size:12px}.excel-preview-table .xl-head,.excel-preview-table .xl-corner{position:sticky;top:0;z-index:4;background:#f3f6fb;color:#334155;border:1px solid #cbd5e1;padding:4px 6px;text-align:center;font-weight:700}.excel-preview-table .xl-corner{left:0;z-index:5}.excel-preview-table .row-num{position:sticky;left:0;z-index:3;background:#f3f6fb;color:#334155;border:1px solid #cbd5e1;text-align:center;font-weight:700}.excel-preview-table .xl-cell{border:1px solid #bfc7d5;min-width:65px;min-height:22px;padding:4px 6px;background:#fff;color:#111;outline:none}.excel-preview-table .xl-cell:focus{box-shadow:inset 0 0 0 2px var(--accent);position:relative;z-index:2}.excel-logo{max-width:180px;max-height:70px;object-fit:contain;display:block;margin:4px auto}.xl-checkbox{border:1px solid #64748b;background:#fff;color:#0f172a;border-radius:4px;min-width:26px;height:24px;font-size:18px;line-height:20px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}.xl-checkbox:hover{box-shadow:0 0 0 2px rgba(20,184,166,.25)}.checkbox-cell{text-align:center!important;vertical-align:middle!important}.sheet-wrap.excel-surface{background:#e5e7eb;padding:10px}@media(max-width:1000px){.equipment-grid{grid-template-columns:1fr}}
+</style>
+{% endblock %}
+{% block content %}
+<div class="equipment-grid">
+  <div class="card">
+    <div class="card-header"><div class="card-title">Asset Details</div><span class="badge badge-blue">{{ eq.status }}</span></div>
+    <form method="post" action="/equipment-maintenance/{{ eq.id }}/update">
+      <div class="form-grid">
+        <label>Name<input name="name" required value="{{ eq.name }}"></label>
+        <label>Category<input name="category" value="{{ eq.category or '' }}"></label>
+        <label>Serial No<input name="serial_no" value="{{ eq.serial_no or '' }}"></label>
+        <label>Status<select name="status">{% for st in ['Available','In Use','Maintenance','Out of Service'] %}<option value="{{ st }}" {% if eq.status==st %}selected{% endif %}>{{ st }}</option>{% endfor %}</select></label>
+        <label>Manufacture Date<input type="date" name="manufacture_date" value="{{ eq.manufacture_date or '' }}"></label>
+        <label>Last Service<input type="date" name="last_service_date" value="{{ eq.last_service_date or '' }}"></label>
+        <label>Next Service<input type="date" name="next_service_date" value="{{ eq.next_service_date or '' }}"></label>
+        <label>Location<input name="location" value="{{ eq.location or '' }}"></label>
+        <label style="grid-column:1/-1">Notes<textarea name="notes" rows="4">{{ eq.notes or '' }}</textarea></label>
+      </div>
+      <div style="margin-top:14px"><button class="btn btn-primary" type="submit">Save Changes</button></div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><div class="card-title">Maintenance Log</div><button class="btn btn-primary btn-sm" onclick="openModal('logModal')">Add Row</button></div>
+    <div class="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>By</th><th>Next Due</th><th>Notes</th></tr></thead><tbody>
+      {% for l in logs %}
+      <tr><td class="mono">{{ l.service_date }}</td><td>{{ l.service_type }}</td><td>{{ l.performed_by or (l.full_name or l.username or '—') }}</td><td class="mono">{{ l.next_due_date or '—' }}</td><td>{{ l.notes or '' }}</td></tr>
+      {% else %}<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text3)">No maintenance rows yet.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </div>
+</div>
+
+<div class="card sheet-launch-card">
+  <div class="card-header">
+    <div>
+      <div class="card-title">Live Sync Spreadsheet</div>
+      <div class="source-note">Live Sync edits are saved back into the original Excel workbook while keeping formatting, logos, colors, and formulas wherever possible.</div>
+    </div>
+    <div class="topbar-actions">
+      {% if eq.source_file_path %}<a class="btn btn-secondary btn-sm" href="/equipment-maintenance/{{ eq.id }}/source">⬇ Original XLSX</a>{% endif %}
+      <button class="btn btn-primary btn-sm" type="button" onclick="openModal('sheetModal')">▣ Live Sync</button>
+      <a class="btn btn-secondary btn-sm" href="/equipment-maintenance/{{ eq.id }}/sheet/export.xlsx">Export Data XLSX</a>
+    </div>
+  </div>
+  <div class="source-note">Tip: لو الشيت كبير، افتحه من زر <b>Live Sync</b> وسيظهر في نافذة واسعة منفصلة للتعديل.</div>
+</div>
+
+<div id="sheetModal" class="modal-overlay">
+  <div class="modal sheet-modal">
+    <div class="modal-header">
+      <div class="modal-title">Live Sync Excel Editor — {{ eq.name }}</div>
+      <button type="button" class="modal-close" onclick="closeModal('sheetModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:10px;flex-wrap:wrap">
+        {% if eq.source_file_path %}<button class="btn btn-secondary btn-sm" type="button" onclick="importSourceSheet()">↻ Re-import Source</button>{% endif %}
+        <button class="btn btn-secondary btn-sm" type="button" onclick="addSheetRow()">＋ Add Row</button>
+        <a class="btn btn-primary btn-sm" href="/equipment-maintenance/{{ eq.id }}/sheet/download-updated.xlsx">Download Updated Excel</a>
+      </div>
+      <div class="sheet-shell">
+    <div class="sheet-toolbar"><span class="pill-live"><span class="pill-dot"></span> Live sync</span><span class="sheet-status" id="sheetStatus">Ready</span></div>
+    <div class="sheet-wrap excel-surface">
+      {% if sheet.html %}
+        {{ sheet.html|safe }}
+      {% else %}
+        <table class="sheet-table" id="sheetTable">
+          <thead><tr><th class="row-h">#</th>{% for c in sheet.cols %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+          <tbody>
+          {% for row in sheet.rows %}
+            {% set rownum = loop.index %}
+            <tr><td class="row-num">{{ rownum }}</td>{% for val in row %}<td class="sheet-cell" contenteditable="true" data-row="{{ rownum }}" data-col="{{ loop.index }}">{{ val }}</td>{% endfor %}</tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+    </div>
+  </div>
+
+    </div>
+  </div>
+</div>
+
+<div id="logModal" class="modal-overlay"><div class="modal"><form method="post" action="/equipment-maintenance/{{ eq.id }}/logs/create">
+  <div class="modal-header"><div class="modal-title">Add Maintenance Row</div><button type="button" class="modal-close" onclick="closeModal('logModal')">×</button></div>
+  <div class="modal-body"><div class="form-grid">
+    <label>Service Date<input type="date" name="service_date" required></label>
+    <label>Service Type<input name="service_type" value="Maintenance"></label>
+    <label>Performed By<input name="performed_by" placeholder="Tarek / team"></label>
+    <label>Next Due<input type="date" name="next_due_date"></label>
+    <label style="grid-column:1/-1">Notes<textarea name="notes" rows="4"></textarea></label>
+  </div></div>
+  <div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="closeModal('logModal')">Cancel</button><button class="btn btn-primary" type="submit">Add Row</button></div>
+</form></div></div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/trs_realtime.js"></script>
+<script>
+const EQUIPMENT_ID = {{ eq.id }};
+const statusEl = document.getElementById('sheetStatus');
+const timers = new Map();
+function setStatus(msg){ statusEl.textContent = msg; }
+function getCellValue(cell){
+  const cb = cell.querySelector('.xl-checkbox');
+  if(cb) return cb.dataset.value || (cb.textContent.includes('☑') ? 'TRUE' : 'FALSE');
+  return cell.innerText.trim();
+}
+function saveCell(cell){
+  const row = Number(cell.dataset.row), col = Number(cell.dataset.col), value = getCellValue(cell);
+  cell.classList.add('dirty'); setStatus(`Saving ${colName(col)}${row} to original Excel...`);
+  fetch(`/equipment-maintenance/${EQUIPMENT_ID}/sheet/cell`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({row, col, value})})
+    .then(r=>r.json()).then(j=>{ if(!j.ok) throw new Error(j.error||'Save failed'); cell.classList.remove('dirty'); cell.classList.add('saved'); setTimeout(()=>cell.classList.remove('saved'),900); setStatus(j.source_saved ? 'Saved to original Excel' : ('Saved live only: ' + (j.source_message||''))); })
+    .catch(e=>{ setStatus(e.message); toast(e.message,'error'); });
+}
+function colName(n){ let s=''; while(n>0){let r=(n-1)%26; s=String.fromCharCode(65+r)+s; n=Math.floor((n-1)/26);} return s; }
+document.querySelectorAll('.sheet-cell').forEach(cell=>{
+  const cb = cell.querySelector('.xl-checkbox');
+  if(cb){
+    cb.addEventListener('click',()=>{
+      const checked = cb.textContent.includes('☑');
+      cb.textContent = checked ? '☐' : '☑';
+      const original = (cell.dataset.original || '').trim().toLowerCase();
+      if(['yes','no','y','n'].includes(original)) cb.dataset.value = checked ? 'NO' : 'YES';
+      else if(['☑','☐','☒','✓','✔','✗'].includes(cell.dataset.original || '')) cb.dataset.value = checked ? '☐' : '☑';
+      else cb.dataset.value = checked ? 'FALSE' : 'TRUE';
+      saveCell(cell);
+    });
+    return;
+  }
+  cell.addEventListener('input',()=>{ const key=cell.dataset.row+':'+cell.dataset.col; clearTimeout(timers.get(key)); timers.set(key,setTimeout(()=>saveCell(cell),550)); });
+  cell.addEventListener('blur',()=>saveCell(cell));
+});
+function addSheetRow(){ fetch(`/equipment-maintenance/${EQUIPMENT_ID}/sheet/add-row`, {method:'POST'}).then(()=>{toast('Row added. Reopen Live Sync to view it.','success');}); }
+function importSourceSheet(){ fetch(`/equipment-maintenance/${EQUIPMENT_ID}/sheet/import-source`, {method:'POST'}).then(r=>r.json()).then(j=>{ if(j.ok){toast('Source Excel imported','success'); location.reload();} else toast(j.error||'Import failed','error'); }); }
+TRSRealtime.connect('equipment', (msg)=>{
+  if(msg.equipment_id && Number(msg.equipment_id)!==EQUIPMENT_ID) return;
+
+  if(msg.type==='equipment_sheet_update'){
+    // Smart cell update — NO reload needed
+    const cell=document.querySelector(`[data-row="${msg.row}"][data-col="${msg.col}"]`);
+    if(cell && document.activeElement!==cell){
+      const cb=cell.querySelector('.xl-checkbox');
+      if(cb){
+        const v=String(msg.value||'').toLowerCase();
+        const checked=['true','yes','y','done','☑','☒','✓','✔','x','checked'].includes(v);
+        cb.textContent=checked?'☑':'☐';
+        cb.dataset.value=checked?'TRUE':'FALSE';
+      } else {
+        cell.innerText=msg.value||'';
+      }
+      cell.classList.add('saved');
+      setTimeout(()=>cell.classList.remove('saved'),900);
+      setStatus(`Updated by ${msg.by||'another user'}`);
+    }
+
+  } else if(msg.type==='equipment_sheet_row_add'){
+    // New row — reload once, debounced so multiple messages don't stack
+    clearTimeout(window._trsReloadTimer);
+    window._trsReloadTimer = setTimeout(()=>{
+      toast('New spreadsheet row added by another user', 'info', 2500);
+    }, 1200);
+
+  } else if(msg.type==='equipment_sheet_import'){
+    // Import done — reload once
+    clearTimeout(window._trsReloadTimer);
+    window._trsReloadTimer = setTimeout(()=>{
+      toast('Sheet imported by another user. Reopen Live Sync to refresh view.','info',2500);
+    }, 500);
+
+  } else if(msg.type==='equipment_update'){
+    // Status/info changed — update badge only, no reload
+    if(msg.status){
+      const badge = document.querySelector('.eq-status-badge');
+      if(badge) badge.textContent = msg.status;
+    }
+    setStatus(`Updated by ${msg.by||'another user'}`);
+
+  } else if(msg.type==='equipment_log_create'){
+    // New maintenance log — show toast only, no reload
+    toast(`🔧 Maintenance log added by ${msg.by||'another user'}`, 'info', 3000);
+    setStatus(`Log added by ${msg.by||'another user'}`);
+
+  } else if(msg.type==='presence'){
+    // Ignore presence messages completely — do NOT reload
+    return;
+  }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% block title %}Job Files{% endblock %}
+{% block page_title %}📁 Job Files Management{% endblock %}
+{% block topbar_actions %}
+<button class="btn btn-secondary btn-sm" onclick="openModal('createFolderModal')">＋ Create Connection</button>
+<button class="btn btn-secondary btn-sm" onclick="openModal('importZipModal')">⇪ Import ZIP</button>
+<button class="btn btn-primary btn-sm" onclick="openModal('uploadFileModal')">⬆ Upload File</button>
+{% endblock %}
+{% block extra_head %}
+<style>
+.path-pill{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent)}
+.structure-panel{background:linear-gradient(135deg,rgba(20,184,166,.10),rgba(59,130,246,.05));border:1px solid rgba(20,184,166,.24);border-radius:16px;padding:16px;margin-bottom:18px;overflow:hidden}
+.structure-title{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap}.structure-title h3{margin:0}
+.structure-chain{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}.chain-card{border:1px solid var(--border);border-radius:14px;background:rgba(2,8,23,.35);padding:14px;min-height:96px}.chain-label{font-size:10px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px}.chain-value{font-size:18px;font-weight:800;color:var(--text)}.chain-hint{margin-top:8px;color:var(--text3);font-size:12px}
+.browser-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:18px}.browser-col{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;min-height:190px}.browser-title{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}.browser-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 11px;border:1px solid var(--border);border-radius:10px;color:var(--text2);text-decoration:none;background:rgba(255,255,255,.015);margin-bottom:7px}.browser-item:hover,.browser-item.active{border-color:var(--accent);background:rgba(20,184,166,.08);color:var(--accent)}.browser-count{font-size:10px;color:var(--text3);background:rgba(100,116,139,.14);padding:1px 6px;border-radius:10px}.selected-path{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}.crumb{background:rgba(20,184,166,.08);border:1px solid rgba(20,184,166,.18);border-radius:8px;padding:6px 8px;color:var(--text)}.crumb.empty{color:var(--text3);border-style:dashed;background:transparent}
+.connection-card{border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.015);padding:12px;margin-bottom:10px}.connection-card:hover{border-color:var(--accent)}.connection-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.connection-path{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text2);margin-top:4px}.file-icon{font-size:18px;width:28px;text-align:center}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.form-grid label{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px}.form-grid input,.form-grid textarea,.form-grid select,.filter-row input,.filter-row select{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:9px 10px;margin-top:5px}.filter-row{display:grid;grid-template-columns:repeat(6,1fr) auto;gap:10px;align-items:end;margin-bottom:16px}.empty-box{text-align:center;padding:28px;color:var(--text3);border:1px dashed var(--border);border-radius:12px;background:rgba(255,255,255,.015)}.detect-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:8px}.detect-card{border:1px solid var(--border);border-radius:10px;padding:8px;background:rgba(2,8,23,.4)}.detect-card b{display:block;color:var(--text);font-size:12px}.detect-card span{font-size:11px;color:var(--text3)}.well-meta{font-size:11px;color:#93c5fd}
+@media(max-width:1200px){.structure-chain,.browser-grid{grid-template-columns:1fr 1fr}.filter-row{grid-template-columns:1fr 1fr 1fr}.grid-2{grid-template-columns:1fr}}@media(max-width:700px){.structure-chain,.browser-grid,.filter-row,.form-grid{grid-template-columns:1fr}.detect-grid{grid-template-columns:1fr}}
+</style>
+{% endblock %}
+{% block content %}
+<div class="structure-panel">
+  <div class="structure-title">
+    <div>
+      <h3>Smart Job Files Structure</h3>
+      <div class="text-muted text-sm">Company → Year → Month → Rig → Connection Type → Files</div>
+    </div>
+    <button class="btn btn-primary btn-sm" onclick="openModal('createFolderModal')">Create New Connection</button>
+  </div>
+  <div class="structure-chain">
+    <div class="chain-card"><div class="chain-label">Company</div><div class="chain-value">AGIBA</div><div class="chain-hint">Khalda · Simetar</div></div>
+    <div class="chain-card"><div class="chain-label">Year</div><div class="chain-value">2026</div><div class="chain-hint">Extracted from report date</div></div>
+    <div class="chain-card"><div class="chain-label">Month</div><div class="chain-value">04-April</div><div class="chain-hint">From Start Date / Report Date</div></div>
+    <div class="chain-card"><div class="chain-label">Rig</div><div class="chain-value">EDC 47</div><div class="chain-hint">EDC-9 · EDC 12 · ST 5</div></div>
+    <div class="chain-card"><div class="chain-label">Connection Type</div><div class="chain-value">VAM TOP</div><div class="chain-hint">PH-6 · BTC · Premium</div></div>
+  </div>
+</div>
+
+<div class="stats-grid">
+  <div class="stat-card cyan"><div class="stat-icon">📄</div><div class="stat-value">{{ stats.files }}</div><div class="stat-label">Total files</div></div>
+  <div class="stat-card green"><div class="stat-icon">🏢</div><div class="stat-value">{{ stats.companies }}</div><div class="stat-label">Companies</div></div>
+  <div class="stat-card blue"><div class="stat-icon">🔩</div><div class="stat-value">{{ stats.connections }}</div><div class="stat-label">Connection folders</div></div>
+</div>
+
+<div class="selected-path">
+  <span class="crumb {{ '' if filters.company else 'empty' }}">{{ filters.company or 'Select company' }}</span>
+  <span>›</span>
+  <span class="crumb {{ '' if filters.job_year else 'empty' }}">{{ filters.job_year or 'Select year' }}</span>
+  <span>›</span>
+  <span class="crumb {{ '' if filters.job_month else 'empty' }}">{{ filters.job_month or 'Select month' }}</span>
+  <span>›</span>
+  <span class="crumb {{ '' if filters.rig else 'empty' }}">{{ filters.rig or 'Select rig' }}</span>
+  <span>›</span>
+  <span class="crumb {{ '' if filters.connection_name else 'empty' }}">{{ filters.connection_name or 'Select connection' }}</span>
+  {% if filters.company or filters.job_year or filters.job_month or filters.rig or filters.connection_name or filters.q %}<a class="btn btn-ghost btn-sm" href="/job-files">Clear</a>{% endif %}
+</div>
+
+<div class="browser-grid">
+  <div class="browser-col">
+    <div class="browser-title">1. Company</div>
+    {% for c in companies %}
+      <a class="browser-item {% if filters.company==c.company %}active{% endif %}" href="/job-files?company={{ c.company|urlencode }}">
+        <span>{{ c.company }}</span><span class="browser-count">{{ c.c }}</span>
+      </a>
+    {% else %}<div class="text-muted text-sm">No companies yet.</div>{% endfor %}
+  </div>
+  <div class="browser-col">
+    <div class="browser-title">2. Year</div>
+    {% if filters.company %}
+      {% for y in years %}
+        <a class="browser-item {% if filters.job_year==y.job_year %}active{% endif %}" href="/job-files?company={{ filters.company|urlencode }}&job_year={{ y.job_year|urlencode }}">
+          <span>{{ y.job_year }}</span><span class="browser-count">{{ y.c }}</span>
+        </a>
+      {% else %}<div class="text-muted text-sm">No years for this company.</div>{% endfor %}
+    {% else %}<div class="text-muted text-sm">Choose a company first.</div>{% endif %}
+  </div>
+  <div class="browser-col">
+    <div class="browser-title">3. Month</div>
+    {% if filters.company and filters.job_year %}
+      {% for m in months %}
+        <a class="browser-item {% if filters.job_month==m.job_month %}active{% endif %}" href="/job-files?company={{ filters.company|urlencode }}&job_year={{ filters.job_year|urlencode }}&job_month={{ m.job_month|urlencode }}">
+          <span>{{ m.job_month or 'Unsorted' }}</span><span class="browser-count">{{ m.c }}</span>
+        </a>
+      {% else %}<div class="text-muted text-sm">No months for this year.</div>{% endfor %}
+    {% else %}<div class="text-muted text-sm">Choose company, year and month first.</div>{% endif %}
+  </div>
+  <div class="browser-col">
+    <div class="browser-title">4. Rig</div>
+    {% if filters.company and filters.job_year and filters.job_month %}
+      {% for r in rigs %}
+        <a class="browser-item {% if filters.rig==r.rig %}active{% endif %}" href="/job-files?company={{ filters.company|urlencode }}&job_year={{ filters.job_year|urlencode }}&job_month={{ filters.job_month|urlencode }}&rig={{ r.rig|urlencode }}">
+          <span>{{ r.rig }}</span><span class="browser-count">{{ r.c }}</span>
+        </a>
+      {% else %}<div class="text-muted text-sm">No rigs for this year.</div>{% endfor %}
+    {% else %}<div class="text-muted text-sm">Choose company and year first.</div>{% endif %}
+  </div>
+  <div class="browser-col">
+    <div class="browser-title">5. Connection Type</div>
+    {% if filters.company and filters.job_year and filters.job_month and filters.rig %}
+      {% for cn in connections %}
+        <a class="browser-item {% if filters.connection_name==cn.connection_name %}active{% endif %}" href="/job-files?company={{ filters.company|urlencode }}&job_year={{ filters.job_year|urlencode }}&job_month={{ filters.job_month|urlencode }}&rig={{ filters.rig|urlencode }}&connection_name={{ cn.connection_name|urlencode }}">
+          <span>{{ cn.connection_name }}</span><span class="browser-count">{{ cn.c }}</span>
+        </a>
+      {% else %}<div class="text-muted text-sm">No connections for this rig.</div>{% endfor %}
+    {% else %}<div class="text-muted text-sm">Choose company, year, month and rig first.</div>{% endif %}
+  </div>
+</div>
+
+<div class="grid-2" style="align-items:start">
+  <div class="card">
+    <div class="card-header"><div class="card-title">Connection folders</div><span class="badge badge-cyan">Company / Year / Month / Rig / Connection</span></div>
+    {% for f in tree %}
+      {% if (not filters.company or filters.company==f.company) and (not filters.job_year or filters.job_year==f.job_year) and (not filters.job_month or filters.job_month==f.job_month) and (not filters.rig or filters.rig==f.rig) and (not filters.connection_name or filters.connection_name==f.connection_name) %}
+      <div class="connection-card">
+        <div class="connection-head">
+          <div>
+            <a class="fw-bold" style="color:var(--text);text-decoration:none" href="/job-files?company={{ f.company|urlencode }}&job_year={{ f.job_year|urlencode }}&job_month={{ f.job_month|urlencode }}&rig={{ f.rig|urlencode }}&connection_name={{ f.connection_name|urlencode }}">{{ f.connection_name }}</a>
+            <div class="connection-path">{{ f.company }} / {{ f.job_year }} / {{ f.job_month }} / {{ f.rig }} / {{ f.connection_name }}</div>
+            <div class="text-muted text-xs">{{ f.file_count or 0 }} file(s) · Last update {{ (f.last_update or '')[:16] }}</div>
+          </div>
+          {% if user_role in ['Admin','Manager'] and (f.file_count or 0)==0 %}
+          <form method="post" action="/job-files/folders/delete" onsubmit="return confirm('Delete this empty connection folder?')">
+            <input type="hidden" name="company" value="{{ f.company }}"><input type="hidden" name="job_year" value="{{ f.job_year }}"><input type="hidden" name="job_month" value="{{ f.job_month }}"><input type="hidden" name="rig" value="{{ f.rig }}"><input type="hidden" name="connection_name" value="{{ f.connection_name }}">
+            <button class="btn btn-red btn-sm" type="submit">Delete</button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+    {% else %}<div class="empty-box">No connection folders yet. Create a path or upload a PDF.</div>{% endfor %}
+  </div>
+
+  <div class="card">
+    <div class="card-header"><div class="card-title">Files</div><span class="badge badge-blue">{{ files|length }} shown</span></div>
+    <form method="get" class="filter-row">
+      <label><span class="text-xs text-muted">Company</span><input name="company" value="{{ filters.company }}" placeholder="AGIBA"></label>
+      <label><span class="text-xs text-muted">Year</span><input name="job_year" value="{{ filters.job_year }}" placeholder="2026"></label>
+      <label><span class="text-xs text-muted">Month</span><input name="job_month" value="{{ filters.job_month }}" placeholder="04-April"></label>
+      <label><span class="text-xs text-muted">Rig</span><input name="rig" value="{{ filters.rig }}" placeholder="EDC 47"></label>
+      <label><span class="text-xs text-muted">Connection</span><input name="connection_name" value="{{ filters.connection_name }}" placeholder="VAM TOP"></label>
+      <label><span class="text-xs text-muted">Search</span><input name="q" value="{{ filters.q }}" placeholder="file / well / note"></label>
+      <button class="btn btn-secondary" type="submit">Filter</button>
+    </form>
+    <div class="table-wrap"><table><thead><tr><th>File</th><th>Path</th><th>Well</th><th>Uploaded</th><th>Actions</th></tr></thead><tbody>
+      {% for f in files %}
+      <tr>
+        <td><div class="d-flex gap-8 align-center"><span class="file-icon">{% if f.file_type=='pdf' %}📕{% elif f.file_type in ['xlsx','xls'] %}📊{% else %}📄{% endif %}</span><div><a href="/job-files/{{ f.id }}" style="color:var(--text);font-weight:700;text-decoration:none">{{ f.original_name }}</a><div class="text-muted text-xs">{{ f.job_name or '' }}</div></div></div></td>
+        <td><span class="path-pill">{{ f.company }}/{{ f.job_year }}/{{ f.job_month }}/{{ f.rig }}/{{ f.connection_name }}</span></td>
+        <td><span class="well-meta">{{ f.well_name if f.well_name and f.well_name!='GENERAL' else '—' }}</span></td>
+        <td><div class="text-sm">{{ f.created_at[:16] }}</div><div class="text-muted text-xs">{{ f.full_name or f.username or '—' }}</div></td>
+        <td><a class="btn btn-secondary btn-sm" href="/job-files/{{ f.id }}">Open</a>{% if f.file_type=='pdf' %}<a class="btn btn-blue btn-sm" target="_blank" href="/job-files/{{ f.id }}/preview">Preview</a>{% endif %}<a class="btn btn-secondary btn-sm" href="/job-files/{{ f.id }}/download">Download</a>{% if user_role in ['Admin','Manager'] %}<form method="post" action="/job-files/{{ f.id }}/delete" style="display:inline" onsubmit="return confirm('Delete this file?')"><button class="btn btn-red btn-sm" type="submit">Delete</button></form>{% endif %}</td>
+      </tr>
+      {% else %}<tr><td colspan="5"><div class="empty-box">No files in this selection. Upload a PDF and TRS will detect Company / Year / Month / Rig / Connection automatically.</div></td></tr>{% endfor %}
+    </tbody></table></div>
+  </div>
+</div>
+
+<div id="createFolderModal" class="modal-overlay"><div class="modal"><form method="post" action="/job-files/folders/create"><div class="modal-header"><div class="modal-title">Create Connection Path</div><button type="button" class="modal-close" onclick="closeModal('createFolderModal')">×</button></div><div class="modal-body"><div class="form-grid"><label>Company<select name="company"><option>Khalda</option><option selected>AGIBA</option><option>Simetar</option></select></label><label>Year<input name="job_year" value="2026" required></label><label>Month<input name="job_month" value="04-April" required></label><label>Rig<input name="rig" value="EDC 47" required></label><label>Connection Type<input name="connection_name" value="VAM TOP" required></label><label style="grid-column:1/-1">Notes<textarea name="notes" rows="3" placeholder="Optional notes"></textarea></label></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="closeModal('createFolderModal')">Cancel</button><button class="btn btn-primary" type="submit">Create Connection</button></div></form></div></div>
+
+<div id="uploadFileModal" class="modal-overlay"><div class="modal"><form method="post" action="/job-files/upload" enctype="multipart/form-data" id="jobUploadForm"><div class="modal-header"><div class="modal-title">Upload Job File</div><button type="button" class="modal-close" onclick="closeModal('uploadFileModal')">×</button></div><div class="modal-body"><div class="form-grid"><label>Company<select name="company"><option {% if filters.company=='Khalda' %}selected{% endif %}>Khalda</option><option {% if filters.company=='AGIBA' or not filters.company %}selected{% endif %}>AGIBA</option><option {% if filters.company=='Simetar' %}selected{% endif %}>Simetar</option><option>UNKNOWN COMPANY</option></select></label><label>Year<input name="job_year" required value="{{ filters.job_year or '2026' }}"></label><label>Month<input name="job_month" required value="{{ filters.job_month or '04-April' }}"></label><label>Rig<input name="rig" required value="{{ filters.rig or 'EDC 47' }}"></label><label>Connection Type<input name="connection_name" required value="{{ filters.connection_name or 'VAM TOP' }}"></label><label style="grid-column:1/-1">File<input id="smartJobFile" type="file" name="file" required></label><div id="detectBox" style="grid-column:1/-1;display:none;padding:10px;border:1px solid var(--border);border-radius:8px;background:rgba(20,184,166,.06);font-size:12px"></div><label style="grid-column:1/-1">Notes<textarea name="notes" rows="3" placeholder="Optional notes"></textarea></label></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="closeModal('uploadFileModal')">Cancel</button><button class="btn btn-primary" type="submit">Upload</button></div></form></div></div>
+
+<div id="importZipModal" class="modal-overlay"><div class="modal"><form method="post" action="/job-files/import-zip" enctype="multipart/form-data"><div class="modal-header"><div class="modal-title">Import Job Files ZIP</div><button type="button" class="modal-close" onclick="closeModal('importZipModal')">×</button></div><div class="modal-body"><p class="text-muted text-sm">ارفع ZIP فيه PDF/Excel، والسيستم هيصنف الملفات حسب: Company → Year → Month → Rig → Connection Type.</p><div class="form-grid"><label style="grid-column:1/-1">ZIP File<input type="file" name="file" accept=".zip" required></label></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="closeModal('importZipModal')">Cancel</button><button class="btn btn-primary" type="submit">Import ZIP</button></div></form></div></div>
+
+<script>
+(function(){if(window.TRSRealtime){TRSRealtime.connect('job_files',(msg)=>{if(!msg.type||msg.type==='presence')return;toast('Job Files update: '+msg.type.replaceAll('_',' '),'info',1800);});}})();
+(function(){
+  const fileInput=document.getElementById('smartJobFile');
+  const box=document.getElementById('detectBox');
+  if(fileInput){fileInput.addEventListener('change',async()=>{
+    if(!fileInput.files||!fileInput.files[0])return;
+    box.style.display='block';box.textContent='Analyzing PDF name/content...';
+    const fd=new FormData();fd.append('file',fileInput.files[0]);
+    try{
+      const res=await fetch('/job-files/auto-detect',{method:'POST',body:fd});
+      const d=await res.json();
+      const form=document.getElementById('jobUploadForm');
+      form.company.value=d.company||form.company.value;
+      form.job_year.value=d.job_year||form.job_year.value;
+      form.job_month.value=d.job_month||form.job_month.value;
+      form.rig.value=d.rig||form.rig.value;
+      form.connection_name.value=d.connection_name||form.connection_name.value;
+      box.innerHTML=`<b>Suggested path:</b> ${d.detected_path||`${d.company}/${d.job_year}/${d.job_month}/${d.rig}/${d.connection_name}`}<br><div class="detect-grid"><div class="detect-card"><span>Company</span><b>${d.company||''}</b></div><div class="detect-card"><span>Year</span><b>${d.job_year||''}</b></div><div class="detect-card"><span>Month</span><b>${d.job_month||''}</b></div><div class="detect-card"><span>Rig</span><b>${d.rig||''}</b></div><div class="detect-card"><span>Connection</span><b>${d.connection_name||''}</b></div><div class="detect-card"><span>Detected well</span><b>${d.well_name&&d.well_name!=='GENERAL'?d.well_name:'—'}</b></div></div><span class="text-muted">Confidence: ${d.confidence}% — ${d.needs_review?'please review before upload':'ready to upload'}</span>`;
+    }catch(e){box.textContent='Auto detection unavailable. Fill the path manually.';}
+  });}
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}Jobs{% endblock %}
+{% block page_title %}🗂️ Jobs{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-primary" onclick="openModal('newJobModal')">➕ New Job</button>
+{% endblock %}
+
+{% block content %}
+{% if error %}
+<div class="alert alert-error mb-16">⚠ {{ error }}</div>
+{% endif %}
+
+<!-- Filters -->
+<div class="card mb-16">
+  <form method="get" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+    <div style="flex:1;min-width:200px">
+      <label class="form-label">Search</label>
+      <input type="text" name="q" class="form-control" placeholder="Job #, customer, rig..." value="{{ filter_q }}">
+    </div>
+    <div style="min-width:150px">
+      <label class="form-label">Status</label>
+      <select name="status" class="form-control">
+        <option value="">All Statuses</option>
+        {% for s in job_statuses %}
+        <option value="{{ s }}" {% if filter_status == s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn btn-secondary">Filter</button>
+    {% if filter_q or filter_status %}
+    <a href="/jobs" class="btn btn-ghost">Clear</a>
+    {% endif %}
+  </form>
+</div>
+
+<!-- Jobs Table -->
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">All Jobs ({{ jobs|length }})</div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Job Number</th>
+          <th>Customer</th>
+          <th>Rig / Well</th>
+          <th>Device</th>
+          <th>Joints</th>
+          <th>FT Mean</th>
+          <th>Rerun %</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for j in jobs %}
+        <tr>
+          <td>
+            <a href="/jobs/{{ j.id }}" class="mono text-accent" style="font-weight:700;text-decoration:none">
+              {{ j.job_number }}
+            </a>
+          </td>
+          <td>{{ j.customer or '—' }}</td>
+          <td>
+            <div>{{ j.rig or '—' }}</div>
+            <div class="text-muted text-xs">{{ j.well or '' }}</div>
+          </td>
+          <td>
+            {% if j.device_code %}
+            <span class="badge badge-blue">{{ j.device_code }}</span>
+            {% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+          <td>
+            {% if j.total_joints or j.joint_count %}
+            <span class="mono">{{ j.total_joints or j.joint_count }}</span>
+            {% else %}<span class="text-muted text-xs">No data</span>{% endif %}
+          </td>
+          <td>
+            {% if j.ft_mean %}
+            <span class="mono text-accent">{{ "%.0f"|format(j.ft_mean) }}</span>
+            {% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+          <td>
+            {% if j.rerun_rate is not none and j.rerun_rate != '' %}
+            <span class="{{ 'text-red' if j.rerun_rate > 10 else 'text-accent' if j.rerun_rate > 5 else 'text-green' }}">
+              {{ "%.1f"|format(j.rerun_rate) }}%
+            </span>
+            {% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+          <td>
+            {% set s = j.status %}
+            {% if s == 'Active' %}<span class="badge badge-green">{{ s }}</span>
+            {% elif s == 'Completed' %}<span class="badge badge-blue">{{ s }}</span>
+            {% elif s == 'Planned' %}<span class="badge badge-amber">{{ s }}</span>
+            {% elif s == 'Cancelled' %}<span class="badge badge-red">{{ s }}</span>
+            {% else %}<span class="badge badge-gray">{{ s }}</span>{% endif %}
+          </td>
+          <td>
+            <div style="display:flex;gap:4px">
+              <a href="/jobs/{{ j.id }}" class="btn btn-ghost btn-sm">View</a>
+              <a href="/analysis?job_id={{ j.id }}" class="btn btn-secondary btn-sm">Analyze</a>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="9" style="text-align:center;padding:40px;color:var(--text3)">
+            <div style="font-size:32px;margin-bottom:8px">📭</div>
+            <div>No jobs found</div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- New Job Modal -->
+<div class="modal-overlay" id="newJobModal">
+  <div class="modal" style="width:min(700px,95vw)">
+    <div class="modal-header">
+      <div class="modal-title">➕ Create New Job</div>
+      <button class="modal-close" onclick="closeModal('newJobModal')">×</button>
+    </div>
+    <form method="post" action="/jobs/create">
+      <div class="modal-body">
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Job Number *</label>
+            <input type="text" name="job_number" class="form-control" placeholder="e.g. TRS-2024-001" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Status</label>
+            <select name="status" class="form-control">
+              {% for s in job_statuses %}
+              <option value="{{ s }}" {% if s == 'Planned' %}selected{% endif %}>{{ s }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Customer</label>
+            <input type="text" name="customer" class="form-control" placeholder="Customer name">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Rig</label>
+            <input type="text" name="rig" class="form-control" placeholder="Rig name">
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Well</label>
+            <input type="text" name="well" class="form-control" placeholder="Well name/ID">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Field</label>
+            <input type="text" name="field" class="form-control" placeholder="Field name">
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Country</label>
+            <input type="text" name="country" class="form-control" placeholder="Country">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Start Date</label>
+            <input type="date" name="start_date" class="form-control">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Assign Device</label>
+          <select name="device_id" class="form-control">
+            <option value="">— No device —</option>
+            {% for d in devices %}
+            <option value="{{ d.id }}">{{ d.code }} — {{ d.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea name="notes" class="form-control" placeholder="Job notes..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('newJobModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create Job</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

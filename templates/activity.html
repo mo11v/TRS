@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}Activity Log{% endblock %}
+{% block page_title %}🧾 Platform Activity{% endblock %}
+
+{% block topbar_actions %}
+<span class="text-muted text-xs">{{ rows|length }} records</span>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+.filter-row{display:grid;grid-template-columns:180px 1fr 160px auto;gap:10px;align-items:end;margin-bottom:16px}
+@media(max-width:900px){.filter-row{grid-template-columns:1fr}}
+.filter-row label{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px}
+.filter-row input,.filter-row select{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 10px;margin-top:4px;font-size:13px}
+.action-pill{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.a-upload   {background:rgba(16,185,129,.12);color:var(--green);border:1px solid rgba(16,185,129,.25)}
+.a-create   {background:rgba(59,130,246,.12);color:var(--blue);border:1px solid rgba(59,130,246,.25)}
+.a-update   {background:rgba(20,184,166,.12);color:var(--accent);border:1px solid rgba(20,184,166,.25)}
+.a-delete   {background:rgba(239,68,68,.12);color:var(--red);border:1px solid rgba(239,68,68,.25)}
+.a-login    {background:rgba(139,92,246,.12);color:var(--purple);border:1px solid rgba(139,92,246,.25)}
+.a-default  {background:rgba(100,116,139,.12);color:var(--text3);border:1px solid var(--border)}
+.entity-tag {font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text3)}
+.timeline   {position:relative;padding-left:20px}
+.timeline::before{content:'';position:absolute;left:6px;top:0;bottom:0;width:1px;background:var(--border)}
+.timeline-item{position:relative;margin-bottom:2px}
+.timeline-dot{position:absolute;left:-17px;top:14px;width:8px;height:8px;border-radius:50%;background:var(--border2);border:1px solid var(--border)}
+.timeline-dot.ok{background:var(--green)}
+.timeline-dot.warn{background:var(--accent)}
+.timeline-dot.err{background:var(--red)}
+.timeline-dot.info{background:var(--blue)}
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Stats -->
+<div class="stats-grid mb-20">
+  <div class="stat-card blue">
+    <span class="stat-icon">📋</span>
+    <div class="stat-value">{{ rows|length }}</div>
+    <div class="stat-label">Showing</div>
+  </div>
+  <div class="stat-card green">
+    <span class="stat-icon">⬆️</span>
+    <div class="stat-value">{{ activity_counts.upload_create }}</div>
+    <div class="stat-label">Uploads / Creates</div>
+  </div>
+  <div class="stat-card amber">
+    <span class="stat-icon">✏️</span>
+    <div class="stat-value">{{ activity_counts.update_edit }}</div>
+    <div class="stat-label">Updates</div>
+  </div>
+  <div class="stat-card purple">
+    <span class="stat-icon">🔐</span>
+    <div class="stat-value">{{ activity_counts.login }}</div>
+    <div class="stat-label">Logins</div>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="card mb-16">
+  <form class="filter-row" method="get" action="/activity">
+    <label>Entity Type
+      <select name="entity_type">
+        <option value="">All</option>
+        {% for et in ['trs_job_file','trs_equipment','trs_equipment_log','job','user','device'] %}
+        <option value="{{ et }}" {% if filters.entity_type==et %}selected{% endif %}>{{ et }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Search
+      <input name="q" value="{{ filters.q }}" placeholder="action / username / detail keyword">
+    </label>
+    <label>Limit
+      <select name="limit">
+        {% for n in [50, 100, 250, 500] %}
+        <option value="{{ n }}" {% if filters.limit|int==n %}selected{% endif %}>{{ n }} rows</option>
+        {% endfor %}
+      </select>
+    </label>
+    <div style="padding-top:20px">
+      <button class="btn btn-secondary" type="submit" style="width:100%">Filter</button>
+    </div>
+  </form>
+</div>
+
+<!-- Timeline + Table toggle -->
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">Audit Trail</div>
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-ghost btn-sm" id="btnTable"    onclick="showView('table')"   style="border-color:var(--accent);color:var(--accent)">Table</button>
+      <button class="btn btn-ghost btn-sm" id="btnTimeline" onclick="showView('timeline')">Timeline</button>
+    </div>
+  </div>
+
+  <!-- TABLE VIEW -->
+  <div id="viewTable">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>User</th>
+            <th>Action</th>
+            <th>Entity</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in rows %}
+          {% set act = a.action|lower %}
+          <tr>
+            <td class="mono text-xs" style="white-space:nowrap">{{ a.created_at[:16] }}</td>
+            <td>
+              <div style="font-weight:600;font-size:13px">{{ a.full_name or a.username or 'system' }}</div>
+              <div class="text-muted text-xs">{{ a.role or '' }}</div>
+            </td>
+            <td>
+              <span class="action-pill
+                {% if 'upload' in act or 'import' in act %}a-upload
+                {% elif 'create' in act or 'add' in act %}a-create
+                {% elif 'update' in act or 'edit' in act or 'save' in act %}a-update
+                {% elif 'delete' in act or 'remove' in act %}a-delete
+                {% elif 'login' in act %}a-login
+                {% else %}a-default{% endif %}">
+                {{ a.action }}
+              </span>
+            </td>
+            <td>
+              <span class="entity-tag">{{ a.entity_type or '—' }}</span>
+              {% if a.entity_id %}<span class="text-muted text-xs"> #{{ a.entity_id }}</span>{% endif %}
+            </td>
+            <td class="text-xs" style="max-width:320px;word-break:break-word">{{ a.detail or '' }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="5" style="text-align:center;padding:40px;color:var(--text3)">
+              <div style="font-size:28px;margin-bottom:8px">📋</div>
+              No activity found.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TIMELINE VIEW -->
+  <div id="viewTimeline" style="display:none;padding:8px 0">
+    <div class="timeline" style="max-height:600px;overflow-y:auto;padding-right:8px">
+      {% for a in rows %}
+      {% set act = a.action|lower %}
+      <div class="timeline-item">
+        <div class="timeline-dot
+          {% if 'upload' in act or 'create' in act %}ok
+          {% elif 'update' in act or 'edit' in act %}warn
+          {% elif 'delete' in act %}err
+          {% else %}info{% endif %}">
+        </div>
+        <div style="padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--card);margin-bottom:6px">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">
+            <span class="mono text-xs text-muted">{{ a.created_at[:16] }}</span>
+            <span class="action-pill
+              {% if 'upload' in act or 'import' in act %}a-upload
+              {% elif 'create' in act or 'add' in act %}a-create
+              {% elif 'update' in act %}a-update
+              {% elif 'delete' in act %}a-delete
+              {% elif 'login' in act %}a-login
+              {% else %}a-default{% endif %}">{{ a.action }}</span>
+            <span style="font-size:12px;font-weight:600">{{ a.full_name or a.username or 'system' }}</span>
+            {% if a.entity_type %}<span class="entity-tag">{{ a.entity_type }} {% if a.entity_id %}#{{ a.entity_id }}{% endif %}</span>{% endif %}
+          </div>
+          {% if a.detail %}<div class="text-xs text-muted">{{ a.detail }}</div>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showView(v) {
+  document.getElementById('viewTable').style.display    = v==='table'    ? '' : 'none';
+  document.getElementById('viewTimeline').style.display = v==='timeline' ? '' : 'none';
+  document.getElementById('btnTable').style.color    = v==='table'    ? 'var(--accent)' : '';
+  document.getElementById('btnTable').style.borderColor = v==='table' ? 'var(--accent)' : '';
+  document.getElementById('btnTimeline').style.color = v==='timeline' ? 'var(--accent)' : '';
+  document.getElementById('btnTimeline').style.borderColor = v==='timeline' ? 'var(--accent)' : '';
+}
+</script>
+{% endblock %}

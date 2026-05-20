@@ -1,0 +1,630 @@
+{% extends "base.html" %}
+{% block title %}SCADA Live{% endblock %}
+{% block page_title %}📡 SCADA Live{% endblock %}
+
+{% block extra_head %}
+<style>
+.gauge-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:18px 20px;text-align:center;position:relative;overflow:hidden;transition:border-color .3s,box-shadow .3s}
+.gauge-card.live{border-color:rgba(16,185,129,.5);box-shadow:0 0 16px rgba(16,185,129,.1)}
+.gauge-card.alert-flash{border-color:rgba(239,68,68,.6)!important;box-shadow:0 0 20px rgba(239,68,68,.2)!important}
+.gauge-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px}
+.gauge-value{font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:800;line-height:1;margin-bottom:4px;transition:all .25s}
+.gauge-unit{font-size:11px;color:var(--text3);margin-bottom:8px}
+.gauge-card.amber .gauge-value{color:var(--accent)}
+.gauge-card.blue  .gauge-value{color:var(--blue)}
+.gauge-card.purple .gauge-value{color:var(--purple)}
+.gauge-card.cyan  .gauge-value{color:var(--cyan)}
+.gauge-card.red   .gauge-value{color:var(--red)}
+.gauge-card.green .gauge-value{color:var(--green)}
+.trend-bar{height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+.trend-fill{height:100%;border-radius:2px;transition:width .4s ease}
+
+@keyframes pulse-live{0%{box-shadow:0 0 0 0 rgba(16,185,129,.4)}70%{box-shadow:0 0 0 8px rgba(16,185,129,0)}100%{box-shadow:0 0 0 0 rgba(16,185,129,0)}}
+.gauge-card.blink{animation:pulse-live .5s ease}
+
+.ws-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600}
+.ws-badge.on{background:rgba(16,185,129,.15);color:var(--green);border:1px solid rgba(16,185,129,.3)}
+.ws-badge.off{background:rgba(239,68,68,.15);color:var(--red);border:1px solid rgba(239,68,68,.3)}
+.ws-badge.mid{background:rgba(20,184,166,.15);color:var(--accent);border:1px solid rgba(20,184,166,.3)}
+.ws-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.ws-dot.on{background:var(--green);animation:blink 1.5s ease infinite}
+.ws-dot.off{background:var(--red)}
+.ws-dot.mid{background:var(--accent);animation:blink .7s ease infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+.stat-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;font-family:'JetBrains Mono',monospace}
+
+.code-block{background:#020a14;border:1px solid var(--border);border-radius:var(--r2);padding:16px;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#a3e635;white-space:pre;overflow-x:auto;line-height:1.8;max-height:420px;overflow-y:auto}
+</style>
+{% endblock %}
+
+{% block topbar_actions %}
+<div id="wsBadge" class="ws-badge mid">
+  <div class="ws-dot mid" id="wsDot"></div>
+  <span id="wsText">Connecting...</span>
+</div>
+<button class="btn btn-secondary btn-sm" id="btnTestMode" onclick="toggleTestMode()"
+        style="font-size:12px;padding:5px 14px;border:1px solid rgba(20,184,166,.4);color:var(--accent)">
+  🧪 Test Mode: OFF
+</button>
+<select id="deviceSelect" class="form-control" style="width:auto;font-size:12px;padding:5px 10px" onchange="switchDevice(this.value)">
+  <option value="all">📡 All Devices</option>
+  {% for d in devices %}
+  <option value="{{ d.id }}">{{ d.code }} — {{ d.name }}</option>
+  {% endfor %}
+</select>
+<span id="lastTs" class="text-muted text-xs">—</span>
+{% endblock %}
+
+{% block content %}
+
+<!-- Gauges -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:12px;margin-bottom:20px">
+  <div class="gauge-card amber" id="cT">
+    <div class="gauge-label">🔩 Torque</div>
+    <div class="gauge-value" id="gT">—</div>
+    <div class="gauge-unit">ft·lb</div>
+    <div class="trend-bar"><div class="trend-fill" id="trT" style="width:0%;background:var(--accent)"></div></div>
+  </div>
+  <div class="gauge-card blue" id="cTr">
+    <div class="gauge-label">🔄 Turns</div>
+    <div class="gauge-value" id="gTr">—</div>
+    <div class="gauge-unit">rev</div>
+    <div class="trend-bar"><div class="trend-fill" id="trTr" style="width:0%;background:var(--blue)"></div></div>
+  </div>
+  <div class="gauge-card purple" id="cR">
+    <div class="gauge-label">🌀 RPM</div>
+    <div class="gauge-value" id="gR">—</div>
+    <div class="gauge-unit">rpm</div>
+    <div class="trend-bar"><div class="trend-fill" id="trR" style="width:0%;background:var(--purple)"></div></div>
+  </div>
+  <div class="gauge-card cyan" id="cP">
+    <div class="gauge-label">💧 Pressure</div>
+    <div class="gauge-value" id="gP">—</div>
+    <div class="gauge-unit">psi</div>
+    <div class="trend-bar"><div class="trend-fill" id="trP" style="width:0%;background:var(--cyan)"></div></div>
+  </div>
+  <div class="gauge-card red" id="cTmp">
+    <div class="gauge-label">🌡️ Temperature</div>
+    <div class="gauge-value" id="gTmp">—</div>
+    <div class="gauge-unit">°C</div>
+    <div class="trend-bar"><div class="trend-fill" id="trTmp" style="width:0%;background:var(--red)"></div></div>
+  </div>
+  <div class="gauge-card green" id="cW">
+    <div class="gauge-label">⚖️ Weight</div>
+    <div class="gauge-value" id="gW">—</div>
+    <div class="gauge-unit">klbs</div>
+    <div class="trend-bar"><div class="trend-fill" id="trW" style="width:0%;background:var(--green)"></div></div>
+  </div>
+</div>
+
+<!-- Stats pills row -->
+<div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+  <div class="stat-pill" style="background:rgba(20,184,166,.12);color:var(--accent);border:1px solid rgba(20,184,166,.25)">
+    🔩 Joint: <span id="jointNum">—</span>
+  </div>
+  <div class="stat-pill" style="background:rgba(59,130,246,.12);color:var(--blue);border:1px solid rgba(59,130,246,.25)">
+    📊 Readings: <span id="readCount">0</span>
+  </div>
+  <div class="stat-pill" style="background:rgba(239,68,68,.12);color:var(--red);border:1px solid rgba(239,68,68,.25)">
+    ⚠️ Alerts: <span id="alertCount">0</span>
+  </div>
+  <div id="sessionTimer" class="text-muted text-xs" style="margin-left:auto">Session: 00:00:00</div>
+</div>
+
+<!-- Active Jobs -->
+{% if active_jobs %}
+<div class="card mb-16">
+  <div class="card-title mb-12">▶️ Active Jobs</div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap">
+    {% for j in active_jobs %}
+    <div style="padding:10px 14px;border-radius:8px;border:1px solid var(--border);background:var(--card);min-width:180px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <span class="badge badge-green" style="font-size:9px">ACTIVE</span>
+        <span class="mono text-accent fw-bold">{{ j.job_number }}</span>
+      </div>
+      <div class="text-muted text-xs">{{ j.device_code }} · {{ j.customer or '' }}</div>
+      <button class="btn btn-ghost btn-sm" style="margin-top:8px;width:100%"
+        onclick="document.getElementById('deviceSelect').value='{{ j.device_id }}';switchDevice('{{ j.device_id }}')">
+        📡 Monitor
+      </button>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- Charts -->
+<div class="grid-2 mb-16">
+  <div class="card">
+    <div class="card-header"><div class="card-title">📈 Torque — Live</div><span class="text-muted text-xs">Last 60 pts</span></div>
+    <canvas id="ctTorque" height="210"></canvas>
+  </div>
+  <div class="card">
+    <div class="card-header"><div class="card-title">🌀 RPM — Live</div><span class="text-muted text-xs">Last 60 pts</span></div>
+    <canvas id="ctRpm" height="210"></canvas>
+  </div>
+</div>
+<div class="grid-2 mb-16">
+  <div class="card">
+    <div class="card-header"><div class="card-title">🔄 Turns — Live</div><span class="text-muted text-xs">Last 60 pts</span></div>
+    <canvas id="ctTurns" height="180"></canvas>
+  </div>
+  <div class="card">
+    <div class="card-header"><div class="card-title">💧 Pressure — Live</div><span class="text-muted text-xs">Last 60 pts</span></div>
+    <canvas id="ctPressure" height="180"></canvas>
+  </div>
+</div>
+
+<!-- Live Readings Log -->
+<div class="card mb-20">
+  <div class="card-header">
+    <div class="card-title">📋 Readings Log</div>
+    <button class="btn btn-ghost btn-sm" onclick="clearLog()">Clear</button>
+  </div>
+  <div class="table-wrap" style="max-height:280px;overflow-y:auto" id="logWrap">
+    <table>
+      <thead>
+        <tr><th>Time</th><th>Device</th><th>Joint</th><th>Torque</th><th>Turns</th><th>RPM</th><th>Pressure</th><th>Temp</th><th>Source</th></tr>
+      </thead>
+      <tbody id="logBody">
+        {% for r in last_readings %}
+        <tr>
+          <td class="mono text-xs">{{ r.ts[:19] if r.ts else '—' }}</td>
+          <td><span class="badge badge-blue">{{ r.device_code or '—' }}</span></td>
+          <td class="mono">—</td>
+          <td class="mono text-accent">{{ "%.0f"|format(r.torque) if r.torque else '—' }}</td>
+          <td class="mono">{{ "%.3f"|format(r.turns) if r.turns else '—' }}</td>
+          <td class="mono">{{ "%.1f"|format(r.rpm) if r.rpm else '—' }}</td>
+          <td class="mono">{{ "%.0f"|format(r.pressure) if r.pressure else '—' }}</td>
+          <td class="mono">{{ "%.1f"|format(r.temperature) if r.temperature else '—' }}</td>
+          <td class="text-xs text-muted">{{ r.source }}</td>
+        </tr>
+        {% else %}
+        <tr id="emptyRow"><td colspan="9" style="text-align:center;padding:24px;color:var(--text3)">Waiting for ESP32 data...</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ESP32 Setup Guide -->
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">🔌 ESP32 Setup Guide</div>
+    <button class="btn btn-ghost btn-sm" onclick="sendTestReading()">⚡ Send Test Reading</button>
+  </div>
+
+  <div class="grid-2" style="align-items:start;gap:20px">
+    <!-- Arduino Code -->
+    <div>
+      <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:var(--accent)">① Arduino Sketch</div>
+      <div class="code-block" id="espCode"><span style="color:#64748b">// TRS Platform — ESP32 Client
+// Libraries: WiFi, HTTPClient, ArduinoJson</span>
+
+<span style="color:#06b6d4">#include</span> <span style="color:#14b8a6">&lt;WiFi.h&gt;</span>
+<span style="color:#06b6d4">#include</span> <span style="color:#14b8a6">&lt;HTTPClient.h&gt;</span>
+<span style="color:#06b6d4">#include</span> <span style="color:#14b8a6">&lt;ArduinoJson.h&gt;</span>
+
+<span style="color:#64748b">// ── CONFIG (عدّل هنا) ──────────────────────</span>
+<span style="color:#06b6d4">const char*</span> ssid       = <span style="color:#14b8a6">"YOUR_WIFI"</span>;
+<span style="color:#06b6d4">const char*</span> wifiPass   = <span style="color:#14b8a6">"YOUR_PASS"</span>;
+<span style="color:#06b6d4">const char*</span> serverUrl  = <span style="color:#14b8a6">"http://192.168.1.100:8000/api/esp/push"</span>;
+<span style="color:#06b6d4">const char*</span> apiKey     = <span style="color:#14b8a6">"trs-esp-key-2026"</span>;
+<span style="color:#06b6d4">const char*</span> devCode    = <span style="color:#14b8a6">"TRS-001"</span>;   <span style="color:#64748b">// Device code في TRS</span>
+<span style="color:#06b6d4">int</span>         jobId      = 1;           <span style="color:#64748b">// Job ID في TRS</span>
+<span style="color:#06b6d4">int</span>         interval   = 1000;        <span style="color:#64748b">// ms بين كل reading</span>
+
+<span style="color:#64748b">// ── PINS ───────────────────────────────────</span>
+<span style="color:#06b6d4">#define</span> TORQUE_PIN  34  <span style="color:#64748b">// Analog — load cell / strain gauge ADC</span>
+<span style="color:#06b6d4">#define</span> RPM_PIN     35  <span style="color:#64748b">// Analog — hall sensor</span>
+
+<span style="color:#64748b">// ── CALIBRATION ────────────────────────────</span>
+<span style="color:#06b6d4">float</span> torqueScale = 0.5;   <span style="color:#64748b">// ADC raw → ft·lb</span>
+<span style="color:#06b6d4">float</span> rpmScale    = 0.01;  <span style="color:#64748b">// ADC raw → RPM</span>
+<span style="color:#06b6d4">int</span>   jointNum    = 0;
+<span style="color:#06b6d4">float</span> turns       = 0.0;
+<span style="color:#06b6d4">float</span> prevTorque  = 0.0;
+
+<span style="color:#06b6d4">void</span> setup() {
+  Serial.begin(115200);
+  WiFi.begin(ssid, wifiPass);
+  Serial.print(<span style="color:#14b8a6">"WiFi..."</span>);
+  <span style="color:#06b6d4">while</span> (WiFi.status() != WL_CONNECTED) {
+    delay(400); Serial.print(<span style="color:#14b8a6">"."</span>);
+  }
+  Serial.println(<span style="color:#14b8a6">"\nIP: "</span> + WiFi.localIP().toString());
+}
+
+<span style="color:#06b6d4">void</span> loop() {
+  <span style="color:#06b6d4">if</span> (WiFi.status() != WL_CONNECTED) {
+    WiFi.reconnect(); delay(2000); <span style="color:#06b6d4">return</span>;
+  }
+
+  <span style="color:#64748b">// ── Sensors ─────────────────────────────</span>
+  <span style="color:#06b6d4">int</span>   rawT   = analogRead(TORQUE_PIN);
+  <span style="color:#06b6d4">float</span> torque = rawT * torqueScale;
+  <span style="color:#06b6d4">float</span> rpm    = analogRead(RPM_PIN) * rpmScale;
+  turns += rpm / 60.0 * (interval / 1000.0);
+
+  <span style="color:#64748b">// Detect new joint (torque drops after makeup)</span>
+  <span style="color:#06b6d4">if</span> (prevTorque > 100 && torque < 20) {
+    jointNum++;
+    turns = 0.0;
+    Serial.printf(<span style="color:#14b8a6">"★ New joint: %d\n"</span>, jointNum);
+  }
+  prevTorque = torque;
+
+  <span style="color:#64748b">// ── Send to TRS ─────────────────────────</span>
+  HTTPClient http;
+  http.begin(serverUrl);
+  http.addHeader(<span style="color:#14b8a6">"Content-Type"</span>, <span style="color:#14b8a6">"application/json"</span>);
+  http.addHeader(<span style="color:#14b8a6">"X-ESP-Key"</span>, apiKey);
+
+  StaticJsonDocument&lt;256&gt; doc;
+  doc[<span style="color:#14b8a6">"device_code"</span>] = devCode;
+  doc[<span style="color:#14b8a6">"job_id"</span>]     = jobId;
+  doc[<span style="color:#14b8a6">"torque"</span>]     = torque;
+  doc[<span style="color:#14b8a6">"turns"</span>]      = turns;
+  doc[<span style="color:#14b8a6">"rpm"</span>]        = rpm;
+  doc[<span style="color:#14b8a6">"joint_num"</span>]  = jointNum;
+
+  String body; serializeJson(doc, body);
+  <span style="color:#06b6d4">int</span> code = http.POST(body);
+  Serial.printf(<span style="color:#14b8a6">"→ [%d] T=%.1f RPM=%.1f J=%d\n"</span>,
+                code, torque, rpm, jointNum);
+  http.end();
+  delay(interval);
+}</div>
+      <button class="btn btn-secondary btn-sm" style="margin-top:10px;width:100%" onclick="copyCode()">
+        📋 Copy Sketch
+      </button>
+    </div>
+
+    <!-- Connection Info -->
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:2px;color:var(--accent)">② Connection Info</div>
+
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px">
+        <div class="text-xs text-muted mb-6" style="text-transform:uppercase;letter-spacing:.5px">Server Push URL</div>
+        <div class="mono text-accent" style="font-size:12px;word-break:break-all">
+          http://{{ request.headers.get('host', 'SERVER_IP:8000') }}/api/esp/push
+        </div>
+      </div>
+
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px">
+        <div class="text-xs text-muted mb-6" style="text-transform:uppercase;letter-spacing:.5px">API Key Header</div>
+        <div class="mono text-green" style="font-size:12px">X-ESP-Key: trs-esp-key-2026</div>
+        <div class="text-xs text-muted" style="margin-top:4px">غيّره عبر: TRS_ESP_KEY=yourkey</div>
+      </div>
+
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px">
+        <div class="text-xs text-muted mb-6" style="text-transform:uppercase;letter-spacing:.5px">WebSocket (Browser)</div>
+        <div class="mono" style="font-size:11px;color:var(--blue);word-break:break-all">
+          ws://{{ request.headers.get('host', 'SERVER_IP:8000') }}/ws/scada/all
+        </div>
+      </div>
+
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px">
+        <div class="text-xs text-muted mb-6" style="text-transform:uppercase;letter-spacing:.5px">JSON Payload</div>
+        <div class="mono" style="font-size:11px;color:#a3e635;line-height:1.7">{
+  <span style="color:#06b6d4">"device_code"</span>: <span style="color:#14b8a6">"TRS-001"</span>,
+  <span style="color:#06b6d4">"job_id"</span>:     <span style="color:#14b8a6">1</span>,
+  <span style="color:#06b6d4">"torque"</span>:     <span style="color:#14b8a6">1250.5</span>,
+  <span style="color:#06b6d4">"turns"</span>:      <span style="color:#14b8a6">3.142</span>,
+  <span style="color:#06b6d4">"rpm"</span>:        <span style="color:#14b8a6">4.2</span>,
+  <span style="color:#06b6d4">"joint_num"</span>:  <span style="color:#14b8a6">42</span>
+}</div>
+      </div>
+
+      <!-- Test result -->
+      <div id="testResult" style="display:none;padding:10px 12px;border-radius:8px;font-size:12.5px;background:var(--bg3);border:1px solid var(--border)"></div>
+
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px">
+        <div class="text-xs text-muted mb-8" style="text-transform:uppercase;letter-spacing:.5px">Test Connection</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" onclick="sendTestReading()">⚡ Test Push</button>
+          <button class="btn btn-ghost btn-sm" onclick="checkServer()">🔍 Server Status</button>
+        </div>
+      </div>
+
+      <!-- Steps -->
+      <div style="background:rgba(20,184,166,.05);border:1px solid rgba(20,184,166,.2);border-radius:8px;padding:12px">
+        <div class="text-xs text-muted mb-8" style="text-transform:uppercase;letter-spacing:.5px">Quick Steps</div>
+        <div style="font-size:12px;line-height:2;color:var(--text2)">
+          1️⃣ عدّل الـ WiFi SSID وPassword في الكود<br>
+          2️⃣ عدّل الـ serverUrl → IP الـ TRS server<br>
+          3️⃣ عدّل devCode → code الجهاز في TRS<br>
+          4️⃣ عدّل torqueScale حسب الـ calibration<br>
+          5️⃣ Upload للـ ESP32 وافتح Serial Monitor<br>
+          6️⃣ شوف البيانات هنا real-time ✅
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Test Mode Panel -->
+<div id="testPanel" style="display:none" class="card mb-20">
+  <div class="card-header">
+    <div class="card-title">🧪 Test Mode — بدون ESP32</div>
+    <span class="badge badge-amber">SIMULATION</span>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px">
+    <div>
+      <label class="form-label">Torque (ft·lb)</label>
+      <input type="range" id="testTorque" min="0" max="5000" value="3640"
+             oninput="document.getElementById('testTorqueVal').textContent=this.value"
+             style="width:100%;accent-color:var(--accent)">
+      <div style="text-align:center;font-family:'JetBrains Mono',monospace;color:var(--accent);font-weight:700;font-size:18px" id="testTorqueVal">3640</div>
+    </div>
+    <div>
+      <label class="form-label">RPM</label>
+      <input type="range" id="testRpm" min="0" max="30" value="4" step="0.1"
+             oninput="document.getElementById('testRpmVal').textContent=parseFloat(this.value).toFixed(1)"
+             style="width:100%;accent-color:var(--purple)">
+      <div style="text-align:center;font-family:'JetBrains Mono',monospace;color:var(--purple);font-weight:700;font-size:18px" id="testRpmVal">4.0</div>
+    </div>
+    <div>
+      <label class="form-label">Turns</label>
+      <input type="range" id="testTurns" min="0" max="20" value="3" step="0.1"
+             oninput="document.getElementById('testTurnsVal').textContent=parseFloat(this.value).toFixed(2)"
+             style="width:100%;accent-color:var(--blue)">
+      <div style="text-align:center;font-family:'JetBrains Mono',monospace;color:var(--blue);font-weight:700;font-size:18px" id="testTurnsVal">3.00</div>
+    </div>
+    <div>
+      <label class="form-label">Joint Number</label>
+      <input type="number" id="testJoint" value="1" min="1" class="form-control" style="font-size:18px;text-align:center;font-weight:700">
+    </div>
+  </div>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+    <button class="btn btn-primary" style="flex:1" onclick="sendTestReading()">
+      ⚡ Send Single Reading
+    </button>
+    <button class="btn btn-secondary" id="btnAutoTest" style="flex:1" onclick="toggleAutoTest()">
+      ▶ Start Auto Simulation
+    </button>
+    <button class="btn btn-ghost" style="flex:1" onclick="simulateJoint()">
+      🔩 Simulate Full Joint
+    </button>
+  </div>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn btn-ghost btn-sm" onclick="setTorque(3276)">MIN (3276)</button>
+    <button class="btn btn-ghost btn-sm" onclick="setTorque(3640)">OPT (3640)</button>
+    <button class="btn btn-ghost btn-sm" onclick="setTorque(4005)">MAX (4005)</button>
+    <button class="btn btn-ghost btn-sm" onclick="setTorque(4500)">OVER (4500)</button>
+    <button class="btn btn-ghost btn-sm" onclick="setTorque(0)">ZERO (0)</button>
+  </div>
+
+  <div id="testResult" style="margin-top:12px;display:none;padding:10px 12px;border-radius:8px;font-size:13px;font-family:'JetBrains Mono',monospace"></div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+// ── State ──────────────────────────────────────────────────
+const MAX_PTS = 60;
+let ws = null, channel = 'all', readCount = 0, alerts = 0;
+const sessionStart = Date.now();
+const tLabels = [], tT = [], tTr = [], tR = [], tP = [];
+
+// ── Charts ─────────────────────────────────────────────────
+function mkChart(id, label, color, bg) {
+  const el = document.getElementById(id);
+  if (!el) return null;
+  return new Chart(el, {
+    type: 'line',
+    data: { labels: tLabels, datasets: [{ label, data: [], borderColor: color,
+      backgroundColor: bg, borderWidth: 2, pointRadius: 1.5, tension: 0.4, fill: true }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 200 },
+      plugins: { legend: { labels: { color: '#94a3b8', font: { size: 10 } } } },
+      scales: {
+        x: { ticks: { color: '#64748b', font: { size: 9 }, maxTicksLimit: 10, maxRotation: 0 }, grid: { color: 'rgba(30,48,80,.5)' } },
+        y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: 'rgba(30,48,80,.5)' } }
+      }
+    }
+  });
+}
+const cTorque   = mkChart('ctTorque',   'Torque ft·lb', '#14b8a6', 'rgba(20,184,166,.1)');
+const cRpm      = mkChart('ctRpm',      'RPM',          '#8b5cf6', 'rgba(139,92,246,.1)');
+const cTurns    = mkChart('ctTurns',    'Turns rev',    '#06b6d4', 'rgba(6,182,212,.1)');
+const cPressure = mkChart('ctPressure', 'Pressure psi', '#3b82f6', 'rgba(59,130,246,.1)');
+
+// ── WebSocket ──────────────────────────────────────────────
+function wsUrl(ch) {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  return `${proto}://${location.host}/ws/scada/${ch}`;
+}
+
+function setStatus(state) {
+  const b = document.getElementById('wsBadge');
+  const d = document.getElementById('wsDot');
+  const t = document.getElementById('wsText');
+  b.className = `ws-badge ${state}`;
+  d.className = `ws-dot ${state}`;
+  t.textContent = state === 'on' ? '● Live' : state === 'off' ? '✕ Offline' : '◌ Connecting...';
+}
+
+function connectWS(ch) {
+  if (ws) { ws.close(); ws = null; }
+  channel = ch;
+  setStatus('mid');
+  ws = new WebSocket(wsUrl(ch));
+
+  ws.onopen = () => {
+    setStatus('on');
+    toast('📡 SCADA connected', 'success', 2000);
+  };
+
+  ws.onmessage = (e) => {
+    try {
+      const d = JSON.parse(e.data);
+      if (d.type === 'history') {
+        d.readings.forEach(r => pushPoint(r));
+        refreshCharts();
+      } else if (d.type === 'reading') {
+        pushPoint(d);
+        refreshCharts();
+        updateGauges(d);
+        addLogRow(d);
+        blinkCards();
+      }
+    } catch(ex) {}
+  };
+
+  ws.onerror   = () => setStatus('off');
+  ws.onclose   = () => { setStatus('off'); setTimeout(() => connectWS(channel), 3000); };
+}
+
+function switchDevice(v) {
+  tLabels.length = tT.length = tTr.length = tR.length = tP.length = 0;
+  connectWS(v || 'all');
+}
+
+// ── Data ───────────────────────────────────────────────────
+function pushPoint(r) {
+  const ts = r.ts ? r.ts.substring(11,19) : new Date().toLocaleTimeString();
+  if (tLabels.length >= MAX_PTS) {
+    tLabels.shift(); tT.shift(); tTr.shift(); tR.shift(); tP.shift();
+  }
+  tLabels.push(ts);
+  tT.push(r.torque ?? null);
+  tTr.push(r.turns ?? null);
+  tR.push(r.rpm ?? null);
+  tP.push(r.pressure ?? null);
+}
+
+function refreshCharts() {
+  [[cTorque,tT],[cTurns,tTr],[cRpm,tR],[cPressure,tP]].forEach(([c,d]) => {
+    if (!c) return;
+    c.data.labels = [...tLabels];
+    c.data.datasets[0].data = [...d];
+    c.update('none');
+  });
+}
+
+function gauge(id, val, dec, max, trendId, color) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = (val !== null && val !== undefined) ? parseFloat(val).toFixed(dec) : '—';
+  const tr = document.getElementById(trendId);
+  if (tr && val !== null) tr.style.width = Math.min(100, Math.abs(val)/max*100) + '%';
+}
+
+function updateGauges(r) {
+  readCount++;
+  document.getElementById('readCount').textContent = readCount;
+  document.getElementById('lastTs').textContent = r.ts ? r.ts.substring(11,19) : '—';
+  gauge('gT',   r.torque,      0, 3000, 'trT',   '#14b8a6');
+  gauge('gTr',  r.turns,       3,   50, 'trTr',  '#3b82f6');
+  gauge('gR',   r.rpm,         1,   30, 'trR',   '#8b5cf6');
+  gauge('gP',   r.pressure,    0, 5000, 'trP',   '#06b6d4');
+  gauge('gTmp', r.temperature, 1,  100, 'trTmp', '#ef4444');
+  gauge('gW',   r.weight,      1,  500, 'trW',   '#10b981');
+  if (r.joint_num !== null && r.joint_num !== undefined)
+    document.getElementById('jointNum').textContent = r.joint_num;
+  // Alert: torque > 90% of 3000
+  if (r.torque && r.torque > 2700) {
+    alerts++;
+    document.getElementById('alertCount').textContent = alerts;
+    const card = document.getElementById('cT');
+    card.classList.add('alert-flash');
+    setTimeout(() => card.classList.remove('alert-flash'), 2000);
+    toast(`⚠️ High torque: ${parseFloat(r.torque).toFixed(0)} ft·lb`, 'warning', 3000);
+  }
+}
+
+function blinkCards() {
+  document.querySelectorAll('.gauge-card').forEach(c => {
+    c.classList.add('blink','live');
+    setTimeout(() => c.classList.remove('blink'), 600);
+  });
+}
+
+function addLogRow(r) {
+  const tbody = document.getElementById('logBody');
+  const empty = document.getElementById('emptyRow');
+  if (empty) empty.remove();
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td class="mono" style="font-size:11px">${r.ts ? r.ts.substring(0,19) : '—'}</td>
+    <td><span class="badge badge-blue">${r.device_code || r.device_id || '—'}</span></td>
+    <td class="mono">${r.joint_num !== undefined && r.joint_num !== null ? r.joint_num : '—'}</td>
+    <td class="mono fw-bold" style="color:var(--accent)">${r.torque !== null ? parseFloat(r.torque).toFixed(0) : '—'}</td>
+    <td class="mono">${r.turns !== null ? parseFloat(r.turns).toFixed(3) : '—'}</td>
+    <td class="mono">${r.rpm !== null ? parseFloat(r.rpm).toFixed(1) : '—'}</td>
+    <td class="mono">${r.pressure !== null ? parseFloat(r.pressure).toFixed(0) : '—'}</td>
+    <td class="mono">${r.temperature !== null ? parseFloat(r.temperature).toFixed(1) : '—'}</td>
+    <td style="font-size:10px;color:var(--text3)">${r.source || 'esp32'}</td>`;
+  tbody.insertBefore(tr, tbody.firstChild);
+  while (tbody.children.length > 80) tbody.removeChild(tbody.lastChild);
+}
+
+function clearLog() {
+  document.getElementById('logBody').innerHTML =
+    '<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--text3)">Log cleared</td></tr>';
+}
+
+// ── Session Timer ─────────────────────────────────────────
+setInterval(() => {
+  const s = Math.floor((Date.now()-sessionStart)/1000);
+  const h = String(Math.floor(s/3600)).padStart(2,'0');
+  const m = String(Math.floor(s%3600/60)).padStart(2,'0');
+  const sec = String(s%60).padStart(2,'0');
+  document.getElementById('sessionTimer').textContent = `Session: ${h}:${m}:${sec}`;
+}, 1000);
+
+// ── Test Tools ────────────────────────────────────────────
+async function sendTestReading() {
+  const r = document.getElementById('testResult');
+  r.style.display = 'block'; r.style.color = 'var(--text3)';
+  r.textContent = '⌛ Sending...';
+  try {
+    const resp = await fetch('/api/esp/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-ESP-Key': 'trs-esp-key-2026' },
+      body: JSON.stringify({
+        device_code: 'ESP-TEST',
+        torque: 800 + Math.random()*600,
+        turns: Math.random()*5,
+        rpm: 2 + Math.random()*8,
+        joint_num: Math.floor(Math.random()*50),
+        source: 'test',
+      })
+    });
+    const d = await resp.json();
+    r.style.color = d.ok ? 'var(--green)' : 'var(--red)';
+    r.textContent = d.ok ? `✅ OK — ID=${d.id}, clients=${d.clients}` : '❌ ' + d.error;
+  } catch(e) {
+    r.style.color = 'var(--red)'; r.textContent = '❌ ' + e.message;
+  }
+}
+
+async function checkServer() {
+  const r = document.getElementById('testResult');
+  r.style.display = 'block'; r.style.color = 'var(--text3)';
+  r.textContent = '⌛ Checking...';
+  try {
+    const d = await (await fetch('/api/esp/status')).json();
+    r.style.color = 'var(--green)';
+    r.textContent = `✅ TRS v${d.version} — WS clients: ${d.ws_clients}`;
+  } catch(e) {
+    r.style.color = 'var(--red)'; r.textContent = '❌ Server unreachable';
+  }
+}
+
+function copyCode() {
+  navigator.clipboard.writeText(document.getElementById('espCode').innerText)
+    .then(() => toast('✅ Code copied!', 'success', 2000));
+}
+
+// ── Start ─────────────────────────────────────────────────
+connectWS('all');
+</script>
+{% endblock %}

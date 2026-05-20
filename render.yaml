@@ -1,0 +1,48 @@
+## TRS Platform — Render.com Deployment
+## Free tier — Firestore + Cloudinary for persistence
+
+services:
+  - type: web
+    name: trs-platform
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    region: frankfurt
+    plan: free
+    healthCheckPath: /api/status
+
+    envVars:
+      # ── App ────────────────────────────────
+      - key: TRS_SECRET_KEY
+        generateValue: true
+      - key: TRS_ADMIN_PASS
+        value: TRS@2024!
+      - key: TRS_SESSION_HOURS
+        value: "12"
+      - key: TRS_MAX_UPLOAD_MB
+        value: "50"
+      - key: TRS_ESP_KEY
+        value: trs-esp-key-2026
+
+      # ── Storage (Render free = /tmp) ───────
+      - key: TRS_DB_PATH
+        value: /tmp/trs_platform.db
+      - key: TRS_UPLOADS
+        value: /tmp/trs_uploads
+      - key: TRS_REPORTS
+        value: /tmp/trs_reports
+
+      # ── Firestore (add after setup) ────────
+      - key: FIRESTORE_PROJECT_ID
+        value: ""            # ← ضيف project ID من Firebase Console
+      - key: FIRESTORE_CREDENTIALS
+        value: ""            # ← ضيف service account JSON كاملاً
+
+      # ── Cloudinary (add after setup) ───────
+      - key: CLOUDINARY_CLOUD_NAME
+        value: ""            # ← من Cloudinary Dashboard
+      - key: CLOUDINARY_API_KEY
+        value: ""
+      - key: CLOUDINARY_API_SECRET
+        value: ""
+
+    autoDeploy: true

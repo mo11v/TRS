@@ -1,0 +1,12 @@
+bcrypt not installed — using SHA256+salt. Run: pip install bcrypt
+INFO:httpx:HTTP Request: GET http://testserver/api/status "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET http://testserver/login "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET http://testserver/ "HTTP/1.1 303 See Other"
+INFO:httpx:HTTP Request: GET http://testserver/job-files "HTTP/1.1 303 See Other"
+INFO:httpx:HTTP Request: GET http://testserver/equipment-maintenance "HTTP/1.1 303 See Other"
+OK /api/status -> 200
+OK /login -> 200
+OK / -> 303
+OK /job-files -> 303
+OK /equipment-maintenance -> 303
+TRS smoke test passed

@@ -1,0 +1,516 @@
+{% extends "base.html" %}
+{% block title %}Job {{ job.job_number }}{% endblock %}
+{% block page_title %}🗂️ {{ job.job_number }}{% endblock %}
+
+{% block topbar_actions %}
+{% if summary %}
+<a href="/api/jobs/{{ job.id }}/report?mode=flagged" class="btn btn-primary btn-sm">📄 Download Report</a>
+<a href="/analysis?job_id={{ job.id }}" class="btn btn-secondary btn-sm">🔬 Full Analysis</a>
+{% endif %}
+<a href="/ai?job_id={{ job.id }}" class="btn btn-ghost btn-sm">🤖 AI</a>
+{% endblock %}
+
+{% block content %}
+<div class="grid-2 mb-16" style="align-items:start">
+  <!-- Job Info -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">📋 Job Information</div>
+      <span class="
+        {% if job.status=='Active' %}badge badge-green
+        {% elif job.status=='Completed' %}badge badge-blue
+        {% elif job.status=='Planned' %}badge badge-amber
+        {% elif job.status=='Cancelled' %}badge badge-red
+        {% else %}badge badge-gray{% endif %}
+      ">{{ job.status }}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      {% macro kv(label, val) %}
+      <div>
+        <div class="text-muted text-xs" style="text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">{{ label }}</div>
+        <div style="font-size:13.5px;font-weight:500">{{ val or '—' }}</div>
+      </div>
+      {% endmacro %}
+      {{ kv("Customer", job.customer) }}
+      {{ kv("Rig", job.rig) }}
+      {{ kv("Well", job.well) }}
+      {{ kv("Field", job.field) }}
+      {{ kv("Country", job.country) }}
+      {{ kv("Start Date", job.start_date) }}
+      <div>
+        <div class="text-muted text-xs" style="text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">Device</div>
+        {% if job.device_code %}
+        <a href="/devices/{{ job.assigned_device_id }}" class="badge badge-blue" style="text-decoration:none">{{ job.device_code }}</a>
+        <span class="text-muted text-xs"> {{ job.device_name }}</span>
+        {% else %}<span class="text-muted">—</span>{% endif %}
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Quick actions -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <form method="post" action="/jobs/{{ job.id }}/update-status" style="display:flex;gap:6px;align-items:center">
+        <select name="status" class="form-control" style="width:auto;font-size:12px;padding:5px 8px">
+          {% for s in job_statuses %}
+          <option value="{{ s }}" {% if s == job.status %}selected{% endif %}>{{ s }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-secondary btn-sm">Update Status</button>
+      </form>
+      <button class="btn btn-ghost btn-sm" onclick="openModal('assignDeviceModal')">🔧 Assign Device</button>
+    </div>
+  </div>
+
+  <!-- MTT Summary -->
+  {% if summary %}
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">🔬 MTT Summary</div>
+      <span class="badge badge-cyan">{{ summary.pipe_type or 'Unknown pipe' }}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
+      <div style="text-align:center;padding:12px;background:var(--bg3);border-radius:8px">
+        <div class="mono text-accent" style="font-size:22px;font-weight:800">{{ summary.total_joints }}</div>
+        <div class="text-muted text-xs">Total Joints</div>
+      </div>
+      <div style="text-align:center;padding:12px;background:var(--bg3);border-radius:8px">
+        <div class="mono text-green" style="font-size:22px;font-weight:800">{{ summary.ok_count }}</div>
+        <div class="text-muted text-xs">OK</div>
+      </div>
+      <div style="text-align:center;padding:12px;background:var(--bg3);border-radius:8px">
+        <div class="mono {% if summary.rerun_rate > 10 %}text-red{% elif summary.rerun_rate > 5 %}text-accent{% else %}text-green{% endif %}"
+             style="font-size:22px;font-weight:800">
+          {{ "%.1f"|format(summary.rerun_rate) }}%
+        </div>
+        <div class="text-muted text-xs">Rerun Rate</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12.5px">
+      <div class="d-flex gap-8 align-center">
+        <span class="text-muted">FT Mean:</span>
+        <span class="mono text-accent fw-bold">{{ "%.0f"|format(summary.ft_mean or 0) }} ft·lb</span>
+      </div>
+      <div class="d-flex gap-8 align-center">
+        <span class="text-muted">FT Std:</span>
+        <span class="mono">{{ "%.0f"|format(summary.ft_std or 0) }}</span>
+      </div>
+      <div class="d-flex gap-8 align-center">
+        <span class="text-muted">FT Min:</span>
+        <span class="mono">{{ "%.0f"|format(summary.ft_min or 0) }}</span>
+      </div>
+      <div class="d-flex gap-8 align-center">
+        <span class="text-muted">FT Max:</span>
+        <span class="mono">{{ "%.0f"|format(summary.ft_max or 0) }}</span>
+      </div>
+      <div class="d-flex gap-8 align-center">
+        <span class="text-muted">Turns Mean:</span>
+        <span class="mono">{{ "%.2f"|format(summary.turns_mean or 0) }}</span>
+      </div>
+      <div class="d-flex gap-8 align-center">
+        <span class="text-muted">RPM Mean:</span>
+        <span class="mono">{{ "%.1f"|format(summary.rpm_mean or 0) }}</span>
+      </div>
+      <div class="d-flex gap-8 align-center">
+        <span class="text-muted">Outliers:</span>
+        <span class="mono {% if summary.outlier_count > 0 %}text-red{% else %}text-green{% endif %}">{{ summary.outlier_count }}</span>
+      </div>
+      <div class="d-flex gap-8 align-center">
+        <span class="text-muted">Tong:</span>
+        <span>{{ summary.tong_model or '—' }}</span>
+      </div>
+    </div>
+
+    <!-- Job Rating -->
+    {% if job_rating %}
+    <div class="divider"></div>
+    <div style="display:flex;align-items:center;gap:16px">
+      <div class="score-ring"
+           style="border-color:{{ '#10b981' if job_rating.score >= 80 else '#14b8a6' if job_rating.score >= 60 else '#ef4444' }};color:{{ '#10b981' if job_rating.score >= 80 else '#14b8a6' if job_rating.score >= 60 else '#ef4444' }}">
+        <div class="score-val">{{ job_rating.score|int }}</div>
+        <div class="score-lbl">Score</div>
+      </div>
+      <div>
+        <div style="font-weight:700;font-size:14px">{{ job_rating.grade }}</div>
+        <div class="text-muted text-xs" style="margin-top:2px">{{ job_rating.label }}</div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  {% else %}
+  <!-- Upload MTT -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">📄 Upload MTT Report</div>
+    </div>
+    <div class="upload-zone" id="uploadZone" onclick="document.getElementById('mttFile').click()">
+      <div class="upload-zone-icon">📄</div>
+      <div class="upload-zone-text">Upload MTT PDF or CSV</div>
+      <div class="upload-zone-hint">Click or drag & drop here</div>
+    </div>
+    <input type="file" id="mttFile" accept=".pdf,.csv" style="display:none" onchange="uploadMTT(this)">
+    <div id="uploadProgress" style="display:none;margin-top:12px">
+      <div class="text-muted text-sm mb-8">Analyzing MTT file...</div>
+      <div class="progress-bar"><div class="progress-fill" id="uploadBar" style="width:0%"></div></div>
+    </div>
+    <div id="uploadResult" style="margin-top:12px"></div>
+  </div>
+  {% endif %}
+</div>
+
+{% if summary %}
+<!-- Charts Row -->
+<div class="grid-2 mb-16">
+  <div class="card">
+    <div class="card-title mb-16">📈 Final Torque per Joint</div>
+    <canvas id="torqueChart" height="200"></canvas>
+  </div>
+  <div class="card">
+    <div class="card-title mb-16">🔄 Final Turns per Joint</div>
+    <canvas id="turnsChart" height="200"></canvas>
+  </div>
+</div>
+
+<!-- Joints Table -->
+<div class="card mb-16">
+  <div class="card-header">
+    <div class="card-title">🔩 Joint Data ({{ joints|length }})</div>
+    <div style="display:flex;gap:8px">
+      <a href="/api/jobs/{{ job.id }}/report?mode=flagged" class="btn btn-secondary btn-sm">📄 Flagged Report</a>
+      <a href="/api/jobs/{{ job.id }}/report?mode=full" class="btn btn-ghost btn-sm">Full Report</a>
+    </div>
+  </div>
+  <div class="table-wrap" style="max-height:400px;overflow-y:auto">
+    <table>
+      <thead>
+        <tr>
+          <th>Joint</th>
+          <th>Run</th>
+          <th>Rerun</th>
+          <th>Final Torque</th>
+          <th>Final Turns</th>
+          <th>Shoulder Torque</th>
+          <th>Shoulder RPM</th>
+          <th>Delta Torque</th>
+          <th>Datetime</th>
+          <th>Comment</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for j in joints %}
+        <tr class="{{ 'bg-rerun' if j.is_rerun else '' }}"
+            style="{{ 'background:rgba(20,184,166,.05)' if j.is_rerun else '' }}">
+          <td class="mono fw-bold">{{ j.joint_label }}</td>
+          <td class="mono">{{ j.run_number }}</td>
+          <td>
+            {% if j.is_rerun %}<span class="badge badge-amber">Rerun</span>
+            {% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+          <td class="mono">
+            <span class="{% if summary.stats_json and summary.stats_json.max_torque and j.final_torque and j.final_torque > summary.stats_json.max_torque %}text-red{% elif summary.stats_json and summary.stats_json.min_torque and j.final_torque and j.final_torque < summary.stats_json.min_torque %}text-red{% else %}text-accent{% endif %}">
+              {{ "%.0f"|format(j.final_torque or 0) }}
+            </span>
+          </td>
+          <td class="mono">{{ "%.3f"|format(j.final_turns or 0) }}</td>
+          <td class="mono">{{ "%.0f"|format(j.shoulder_torque or 0) }}</td>
+          <td class="mono">{{ "%.1f"|format(j.shoulder_rpm or 0) }}</td>
+          <td class="mono">{{ "%.0f"|format(j.delta_torque or 0) }}</td>
+          <td class="text-muted text-xs">{{ j.datetime[:16] if j.datetime else '—' }}</td>
+          <td class="text-xs">{{ j.comment or '' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Re-upload zone for existing job -->
+<div class="card mb-16">
+  <div class="card-header">
+    <div class="card-title">🔄 Re-upload MTT File</div>
+    <span class="text-muted text-xs">Replace existing analysis data</span>
+  </div>
+  <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+    <div class="upload-zone" style="flex:1;min-width:200px;padding:16px" id="uploadZone2"
+         onclick="document.getElementById('mttFile2').click()">
+      <div class="upload-zone-text" style="font-size:13px">📄 Upload new MTT PDF/CSV</div>
+    </div>
+    <input type="file" id="mttFile2" accept=".pdf,.csv" style="display:none" onchange="uploadMTT(this)">
+  </div>
+</div>
+
+{% else %}
+<!-- Upload zone for empty job -->
+<div class="card mb-16">
+  <div class="card-header">
+    <div class="card-title">📄 Upload MTT Report</div>
+  </div>
+  <div class="upload-zone" id="uploadZone" onclick="document.getElementById('mttFile').click()" style="padding:40px">
+    <div class="upload-zone-icon" style="font-size:40px">📄</div>
+    <div class="upload-zone-text">Upload MTT PDF or CSV Report</div>
+    <div class="upload-zone-hint">Supported formats: MTT PDF export, MTT CSV export</div>
+  </div>
+  <input type="file" id="mttFile" accept=".pdf,.csv" style="display:none" onchange="uploadMTT(this)">
+  <div id="uploadProgress" style="display:none;margin-top:12px">
+    <div class="text-muted text-sm mb-8">Analyzing MTT file...</div>
+    <div class="progress-bar"><div class="progress-fill" id="uploadBar" style="width:0%"></div></div>
+  </div>
+  <div id="uploadResult" style="margin-top:12px"></div>
+</div>
+{% endif %}
+
+<!-- AI Insights card -->
+{% if ai %}
+<div class="card mb-16">
+  <div class="card-header">
+    <div class="card-title">🤖 AI Insights</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <span class="text-muted text-xs">{{ ai.analyzed_at[:16] }}</span>
+      <a href="/ai?job_id={{ job.id }}" class="btn btn-ghost btn-sm">View Full</a>
+    </div>
+  </div>
+  <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
+    <div style="text-align:center">
+      <div class="score-ring"
+           style="border-color:{{ '#10b981' if ai.performance_score >= 80 else '#14b8a6' if ai.performance_score >= 60 else '#ef4444' }};
+                  color:{{ '#10b981' if ai.performance_score >= 80 else '#14b8a6' if ai.performance_score >= 60 else '#ef4444' }}">
+        <div class="score-val">{{ ai.performance_score|int }}</div>
+        <div class="score-lbl">Perf</div>
+      </div>
+    </div>
+    <div style="text-align:center">
+      <div class="score-ring"
+           style="border-color:{{ '#10b981' if ai.stability_score >= 80 else '#14b8a6' if ai.stability_score >= 60 else '#ef4444' }};
+                  color:{{ '#10b981' if ai.stability_score >= 80 else '#14b8a6' if ai.stability_score >= 60 else '#ef4444' }}">
+        <div class="score-val">{{ ai.stability_score|int }}</div>
+        <div class="score-lbl">Stability</div>
+      </div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;gap:6px;justify-content:center">
+      <div class="d-flex gap-8 align-center">
+        <span class="text-muted text-sm">Trend:</span>
+        <span class="badge {% if ai.torque_trend == 'stable' %}badge-green{% elif ai.torque_trend == 'increasing' %}badge-amber{% else %}badge-blue{% endif %}">
+          {{ ai.torque_trend }}
+        </span>
+      </div>
+      <div class="d-flex gap-8 align-center">
+        <span class="text-muted text-sm">Anomalies:</span>
+        <span class="mono {% if ai.anomaly_count > 0 %}text-red{% else %}text-green{% endif %}">{{ ai.anomaly_count }}</span>
+      </div>
+    </div>
+  </div>
+  {% if ai.insights_json %}
+  <div style="display:flex;flex-direction:column;gap:8px">
+    {% set insights = ai.insights_json if ai.insights_json is iterable and ai.insights_json is not string else [] %}
+    {% for insight in insights[:3] %}
+    <div style="padding:10px 12px;border-radius:8px;display:flex;gap:10px;align-items:flex-start;
+         background:{% if insight.type=='critical' %}rgba(239,68,68,.08){% elif insight.type=='warning' %}rgba(20,184,166,.08){% elif insight.type=='success' %}rgba(16,185,129,.08){% else %}rgba(59,130,246,.08){% endif %};
+         border-left:3px solid {% if insight.type=='critical' %}var(--red){% elif insight.type=='warning' %}var(--accent){% elif insight.type=='success' %}var(--green){% else %}var(--blue){% endif %}">
+      <span style="font-size:16px">{{ insight.icon }}</span>
+      <div>
+        <div style="font-weight:600;font-size:13px">{{ insight.title }}</div>
+        <div class="text-muted text-xs">{{ insight.detail }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+<!-- Assign Device Modal -->
+<div class="modal-overlay" id="assignDeviceModal">
+  <div class="modal" style="width:400px">
+    <div class="modal-header">
+      <div class="modal-title">🔧 Assign Device</div>
+      <button class="modal-close" onclick="closeModal('assignDeviceModal')">×</button>
+    </div>
+    <form method="post" action="/jobs/{{ job.id }}/assign-device">
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Select Device</label>
+          <select name="device_id" class="form-control">
+            <option value="">— No device —</option>
+            {% for d in devices %}
+            <option value="{{ d.id }}" {% if job.assigned_device_id == d.id %}selected{% endif %}>
+              {{ d.code }} — {{ d.name }} ({{ d.status }})
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('assignDeviceModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Assign</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+const jobId = {{ job.id }};
+const joints = {{ joints | tojson if joints else '[]' }};
+const summary = {{ summary | tojson if summary else '{}' }};
+
+// ── Charts ──────────────────────────────────────────────────
+{% if joints %}
+const stats = summary.stats_json || {};
+const maxT = stats.max_torque, minT = stats.min_torque, optT = stats.opt_torque;
+
+const allJoints = joints.filter(j => !j.is_rerun);
+const reruns = joints.filter(j => j.is_rerun);
+
+const torqueCtx = document.getElementById('torqueChart');
+if (torqueCtx) {
+  const colors = allJoints.map(j => {
+    if (!j.final_torque) return 'rgba(100,116,139,0.6)';
+    if (maxT && j.final_torque > maxT) return 'rgba(239,68,68,0.8)';
+    if (minT && j.final_torque < minT) return 'rgba(239,68,68,0.8)';
+    return 'rgba(20,184,166,0.7)';
+  });
+
+  const datasets = [{
+    label: 'Final Torque (ft·lb)',
+    data: allJoints.map(j => j.final_torque),
+    backgroundColor: colors,
+    borderColor: colors.map(c => c.replace('0.7','1').replace('0.8','1')),
+    borderWidth: 1,
+    borderRadius: 2,
+  }];
+
+  if (reruns.length > 0) {
+    datasets.push({
+      label: 'Reruns',
+      data: allJoints.map(j => {
+        const r = reruns.find(r => r.joint_num === j.joint_num);
+        return r ? r.final_torque : null;
+      }),
+      backgroundColor: 'rgba(20,184,166,0.4)',
+      borderColor: '#14b8a6',
+      borderWidth: 1,
+      borderRadius: 2,
+    });
+  }
+
+  new Chart(torqueCtx, {
+    type: 'bar',
+    data: {
+      labels: allJoints.map(j => j.joint_num),
+      datasets,
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#94a3b8', font: { size: 10 } } },
+        annotation: {}
+      },
+      scales: {
+        x: { ticks: { color: '#64748b', font: { size: 9 }, maxRotation: 0, maxTicksLimit: 20 }, grid: { color: 'rgba(30,48,80,.5)' } },
+        y: {
+          ticks: { color: '#94a3b8', font: { size: 10 } },
+          grid: { color: 'rgba(30,48,80,.5)' },
+          title: { display: true, text: 'ft·lb', color: '#64748b', font: { size: 10 } }
+        }
+      }
+    }
+  });
+}
+
+const turnsCtx = document.getElementById('turnsChart');
+if (turnsCtx) {
+  new Chart(turnsCtx, {
+    type: 'line',
+    data: {
+      labels: allJoints.map(j => j.joint_num),
+      datasets: [{
+        label: 'Final Turns',
+        data: allJoints.map(j => j.final_turns),
+        borderColor: '#06b6d4',
+        backgroundColor: 'rgba(6,182,212,0.1)',
+        borderWidth: 2,
+        pointRadius: 2,
+        tension: 0.3,
+        fill: true,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#94a3b8', font: { size: 10 } } } },
+      scales: {
+        x: { ticks: { color: '#64748b', font: { size: 9 }, maxTicksLimit: 20 }, grid: { color: 'rgba(30,48,80,.5)' } },
+        y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: 'rgba(30,48,80,.5)' } }
+      }
+    }
+  });
+}
+{% endif %}
+
+// ── MTT Upload ───────────────────────────────────────────────
+function uploadMTT(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  // Show progress
+  const progressEl = document.getElementById('uploadProgress');
+  const barEl = document.getElementById('uploadBar');
+  const resultEl = document.getElementById('uploadResult');
+  if (progressEl) progressEl.style.display = 'block';
+  if (barEl) {
+    barEl.style.width = '0%';
+    let pct = 0;
+    const iv = setInterval(() => {
+      pct = Math.min(pct + 8, 90);
+      barEl.style.width = pct + '%';
+      if (pct >= 90) clearInterval(iv);
+    }, 120);
+  }
+
+  const fd = new FormData();
+  fd.append('file', file);
+
+  fetch(`/api/upload-mtt/${jobId}`, { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(data => {
+      if (barEl) barEl.style.width = '100%';
+      if (data.ok) {
+        if (resultEl) resultEl.innerHTML = `<div class="alert alert-success">
+          ✅ MTT uploaded: <strong>${data.joints}</strong> joints
+          ${data.reruns ? `, ${data.reruns} reruns` : ''}
+          ${data.pipe_type ? ` — ${data.pipe_type}` : ''}
+        </div>`;
+        toast(`✅ MTT uploaded: ${data.joints} joints`, 'success');
+        setTimeout(() => location.reload(), 1200);
+      } else {
+        if (resultEl) resultEl.innerHTML = `<div class="alert alert-error">⚠ ${data.error}</div>`;
+        toast(data.error, 'error');
+      }
+    })
+    .catch(err => {
+      if (resultEl) resultEl.innerHTML = `<div class="alert alert-error">⚠ Upload failed: ${err}</div>`;
+      toast('Upload failed', 'error');
+    });
+}
+
+// ── Drag & Drop ──────────────────────────────────────────────
+document.querySelectorAll('.upload-zone').forEach(zone => {
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      // Create fake input
+      const inp = { files: [file] };
+      uploadMTT(inp);
+    }
+  });
+});
+</script>
+{% endblock %}

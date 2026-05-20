@@ -1,0 +1,13 @@
+app = "trs-platform"
+primary_region = "fra"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[mounts]]
+  source = "trs_data"
+  destination = "/data"

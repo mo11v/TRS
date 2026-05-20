@@ -1,0 +1,20 @@
+TRS Platform - Ready Build
+
+Login:
+Username: admin
+Password: admin123
+
+Run in CMD from this folder:
+python -m venv .venv
+.venv\Scripts\activate.bat
+pip install -r requirements.txt
+uvicorn app:app --reload
+
+Open:
+http://127.0.0.1:8000
+
+Notes:
+- The old branding has been changed to TRS Platform.
+- Torque Analysis is now one module inside TRS Platform.
+- The local database is not included; it will be created automatically on first run with the admin login above.
+- Sample HPU file included: uploads/equipment/HPU/111470.xlsx

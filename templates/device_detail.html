@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block title %}{{ device.code }}{% endblock %}
+{% block page_title %}🔧 {{ device.code }} — {{ device.name }}{% endblock %}
+
+{% block topbar_actions %}
+{% if 'devices.edit' in perms %}
+<button class="btn btn-secondary btn-sm" onclick="openModal('editDeviceModal')">✏️ Edit</button>
+{% endif %}
+<a href="/devices" class="btn btn-ghost btn-sm">← Devices</a>
+{% endblock %}
+
+{% block content %}
+<div class="grid-2 mb-16" style="align-items:start">
+
+  <!-- Device Info -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">📋 Device Info</div>
+      <span class="badge
+        {% if device.status=='Available' %}badge-green
+        {% elif device.status=='In Job' %}badge-blue
+        {% elif device.status=='Maintenance' %}badge-amber
+        {% else %}badge-red{% endif %}">{{ device.status }}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      {% macro kv(l,v) %}
+      <div>
+        <div class="text-muted text-xs" style="text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">{{ l }}</div>
+        <div style="font-size:13.5px;font-weight:500">{{ v or '—' }}</div>
+      </div>
+      {% endmacro %}
+      {{ kv("Code",      device.code) }}
+      {{ kv("Name",      device.name) }}
+      {{ kv("Category",  device.category) }}
+      {{ kv("Model",     device.model) }}
+      {{ kv("Serial No", device.serial_no) }}
+      {{ kv("Location",  device.location) }}
+    </div>
+    {% if device.notes %}
+    <div style="padding:10px 12px;background:var(--bg3);border-radius:8px;font-size:13px;color:var(--text2)">{{ device.notes }}</div>
+    {% endif %}
+
+    {% if 'devices.edit' in perms %}
+    <div class="divider"></div>
+    <form method="post" action="/devices/{{ device.id }}/update-status" style="display:flex;gap:8px;align-items:center">
+      <select name="status" class="form-control" style="width:auto">
+        {% for s in device_statuses %}
+        <option {% if s==device.status %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn btn-secondary btn-sm">Update Status</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <!-- Stats + Torque history chart -->
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <div class="stats-grid" style="grid-template-columns:1fr 1fr">
+      <div class="stat-card amber">
+        <span class="stat-icon">🗂️</span>
+        <div class="stat-value">{{ jobs|length }}</div>
+        <div class="stat-label">Total Jobs</div>
+      </div>
+      <div class="stat-card blue">
+        <span class="stat-icon">🔩</span>
+        <div class="stat-value">{{ torque_history|sum(attribute='total_joints') if torque_history else 0 }}</div>
+        <div class="stat-label">Total Joints</div>
+      </div>
+    </div>
+
+    {% if torque_history %}
+    <div class="card">
+      <div class="card-title mb-12">📈 Torque History (last {{ torque_history|length }} jobs)</div>
+      <canvas id="deviceTorqueChart" height="180"></canvas>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Jobs Table -->
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">🗂️ Jobs on This Device ({{ jobs|length }})</div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Job #</th><th>Customer</th><th>Status</th><th>Joints</th><th>FT Mean</th><th>Rerun %</th><th>Start Date</th></tr>
+      </thead>
+      <tbody>
+        {% for j in jobs %}
+        <tr onclick="location.href='/jobs/{{ j.id }}'" style="cursor:pointer">
+          <td class="mono text-accent fw-bold">{{ j.job_number }}</td>
+          <td>{{ j.customer or '—' }}</td>
+          <td>
+            <span class="badge
+              {% if j.status=='Active' %}badge-green
+              {% elif j.status=='Completed' %}badge-blue
+              {% elif j.status=='Planned' %}badge-amber
+              {% else %}badge-gray{% endif %}">{{ j.status }}</span>
+          </td>
+          <td class="mono">{{ j.total_joints or '—' }}</td>
+          <td class="mono text-accent">{% if j.ft_mean %}{{ "%.0f"|format(j.ft_mean) }}{% else %}—{% endif %}</td>
+          <td>
+            {% if j.rerun_rate is not none %}
+            <span class="{{ 'text-red' if j.rerun_rate>10 else 'text-accent' if j.rerun_rate>5 else 'text-green' }}">
+              {{ "%.1f"|format(j.rerun_rate) }}%
+            </span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="text-muted text-xs">{{ j.start_date or '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text3)">No jobs yet</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if 'devices.edit' in perms %}
+<!-- Edit Modal -->
+<div class="modal-overlay" id="editDeviceModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">✏️ Edit Device</div>
+      <button class="modal-close" onclick="closeModal('editDeviceModal')">×</button>
+    </div>
+    <form method="post" action="/devices/{{ device.id }}/edit">
+      <div class="modal-body">
+        <div class="grid-2">
+          <div class="form-group"><label class="form-label">Code</label><input type="text" name="code" class="form-control" value="{{ device.code }}" required></div>
+          <div class="form-group"><label class="form-label">Name</label><input type="text" name="name" class="form-control" value="{{ device.name }}" required></div>
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Category</label>
+            <select name="category" class="form-control">
+              {% for c in ['Torque Turn System','Power Tongs','Data Acquisition Unit','Hydraulic Power Unit','TRS Unit','Other'] %}
+              <option {% if c==device.category %}selected{% endif %}>{{ c }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group"><label class="form-label">Model</label><input type="text" name="model" class="form-control" value="{{ device.model or '' }}"></div>
+        </div>
+        <div class="grid-2">
+          <div class="form-group"><label class="form-label">Serial No</label><input type="text" name="serial_no" class="form-control" value="{{ device.serial_no or '' }}"></div>
+          <div class="form-group"><label class="form-label">Location</label><input type="text" name="location" class="form-control" value="{{ device.location or '' }}"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Notes</label><textarea name="notes" class="form-control">{{ device.notes or '' }}</textarea></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('editDeviceModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+{% if torque_history %}
+const hist = {{ torque_history | tojson }};
+const ctx  = document.getElementById('deviceTorqueChart');
+if (ctx && hist.length > 0) {
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: hist.map(h => h.job_number),
+      datasets: [
+        { label: 'FT Mean', data: hist.map(h => h.ft_mean),
+          backgroundColor: 'rgba(20,184,166,.7)', borderColor:'#14b8a6', borderWidth:1, borderRadius:3 },
+        { label: 'FT Max',  data: hist.map(h => h.ft_max),
+          backgroundColor: 'rgba(239,68,68,.35)', borderColor:'#ef4444', borderWidth:1, borderRadius:3 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color:'#94a3b8', font:{ size:10 } } } },
+      scales: {
+        x: { ticks:{ color:'#64748b', font:{size:9}, maxRotation:35 }, grid:{ color:'rgba(30,48,80,.5)' } },
+        y: { ticks:{ color:'#94a3b8', font:{size:10} }, grid:{ color:'rgba(30,48,80,.5)' },
+             title:{ display:true, text:'ft·lb', color:'#64748b', font:{size:9} } }
+      }
+    }
+  });
+}
+{% endif %}
+</script>
+{% endblock %}

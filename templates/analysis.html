@@ -1,0 +1,368 @@
+{% extends "base.html" %}
+{% block title %}Job Analysis{% endblock %}
+{% block page_title %}🔬 Job Analysis{% endblock %}
+
+{% block topbar_actions %}
+{% if selected_job and summary %}
+<a href="/api/jobs/{{ selected_job.id }}/report?mode=flagged" class="btn btn-primary btn-sm">📄 Download Report</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="grid-2 mb-16" style="align-items:start">
+  <!-- Job Selector -->
+  <div class="card">
+    <div class="card-title mb-16">🗂️ Select Job</div>
+    <div style="display:flex;flex-direction:column;gap:6px;max-height:420px;overflow-y:auto">
+      {% for j in all_jobs %}
+      <a href="/analysis?job_id={{ j.id }}"
+         style="padding:10px 12px;border-radius:8px;text-decoration:none;border:1px solid {{ 'var(--accent)' if selected_job_id == j.id else 'var(--border)' }};background:{{ 'rgba(20,184,166,.08)' if selected_job_id == j.id else 'var(--card)' }};transition:all .15s;display:block">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="mono text-accent fw-bold" style="font-size:13px">{{ j.job_number }}</span>
+          {% if j.total_joints %}<span class="badge badge-cyan">{{ j.total_joints }} joints</span>{% endif %}
+        </div>
+        <div class="text-muted text-xs" style="margin-top:2px">
+          {{ j.customer or '—' }}
+          {% if j.ft_mean %} · FT {{ "%.0f"|format(j.ft_mean) }} ft·lb{% endif %}
+          {% if j.rerun_rate is not none %} · Rerun {{ "%.1f"|format(j.rerun_rate) }}%{% endif %}
+        </div>
+      </a>
+      {% else %}
+      <div class="text-muted text-sm" style="padding:16px;text-align:center">
+        No jobs with MTT data — <a href="/jobs" style="color:var(--accent)">upload MTT first</a>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Analysis Results -->
+  {% if selected_job and summary %}
+  <div style="display:flex;flex-direction:column;gap:16px">
+    <!-- Summary Card -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">📊 {{ selected_job.job_number }}</div>
+        {% if job_rating %}
+        <div class="score-ring"
+             style="width:56px;height:56px;border-color:{{ '#10b981' if job_rating.score >= 80 else '#14b8a6' if job_rating.score >= 60 else '#ef4444' }};
+                    color:{{ '#10b981' if job_rating.score >= 80 else '#14b8a6' if job_rating.score >= 60 else '#ef4444' }}">
+          <div class="score-val" style="font-size:15px">{{ job_rating.score|int }}</div>
+          <div class="score-lbl">Grade</div>
+        </div>
+        {% endif %}
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
+        <div style="text-align:center;padding:10px;background:var(--bg3);border-radius:8px">
+          <div class="mono text-accent" style="font-size:20px;font-weight:800">{{ summary.total_joints }}</div>
+          <div class="text-muted text-xs">Joints</div>
+        </div>
+        <div style="text-align:center;padding:10px;background:var(--bg3);border-radius:8px">
+          <div class="mono text-green" style="font-size:20px;font-weight:800">{{ summary.ok_count }}</div>
+          <div class="text-muted text-xs">OK</div>
+        </div>
+        <div style="text-align:center;padding:10px;background:var(--bg3);border-radius:8px">
+          <div class="mono {{ 'text-red' if summary.rerun_rate > 10 else 'text-accent' if summary.rerun_rate > 5 else 'text-green' }}" style="font-size:20px;font-weight:800">
+            {{ "%.1f"|format(summary.rerun_rate) }}%
+          </div>
+          <div class="text-muted text-xs">Rerun Rate</div>
+        </div>
+      </div>
+
+      <!-- Spec limits -->
+      {% if summary.stats_json and summary.stats_json is mapping %}
+      {% set s = summary.stats_json %}
+      {% if s.max_torque or s.opt_torque or s.min_torque %}
+      <div style="background:var(--bg3);border-radius:8px;padding:10px;margin-bottom:10px">
+        <div class="text-muted text-xs mb-8" style="text-transform:uppercase;letter-spacing:.5px">Torque Specs</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          {% if s.min_torque %}<div><span class="text-muted text-xs">Min: </span><span class="mono text-red">{{ s.min_torque }}</span></div>{% endif %}
+          {% if s.opt_torque %}<div><span class="text-muted text-xs">Opt: </span><span class="mono text-green">{{ s.opt_torque }}</span></div>{% endif %}
+          {% if s.max_torque %}<div><span class="text-muted text-xs">Max: </span><span class="mono text-red">{{ s.max_torque }}</span></div>{% endif %}
+        </div>
+      </div>
+      {% endif %}
+      {% endif %}
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12.5px">
+        <div class="d-flex gap-8"><span class="text-muted">FT Mean:</span><span class="mono text-accent fw-bold">{{ "%.0f"|format(summary.ft_mean or 0) }}</span></div>
+        <div class="d-flex gap-8"><span class="text-muted">FT Std:</span><span class="mono">{{ "%.0f"|format(summary.ft_std or 0) }}</span></div>
+        <div class="d-flex gap-8"><span class="text-muted">FT Min:</span><span class="mono">{{ "%.0f"|format(summary.ft_min or 0) }}</span></div>
+        <div class="d-flex gap-8"><span class="text-muted">FT Max:</span><span class="mono">{{ "%.0f"|format(summary.ft_max or 0) }}</span></div>
+        <div class="d-flex gap-8"><span class="text-muted">Outliers:</span><span class="mono {{ 'text-red' if summary.outlier_count > 0 else 'text-green' }}">{{ summary.outlier_count }}</span></div>
+        <div class="d-flex gap-8"><span class="text-muted">Low RPM:</span><span class="mono {{ 'text-red' if summary.low_rpm_count > 0 else 'text-green' }}">{{ summary.low_rpm_count }}</span></div>
+      </div>
+    </div>
+
+    <!-- Outliers / Reruns quick list -->
+    {% if summary.outliers_high or summary.outliers_low or summary.reruns %}
+    <div class="card">
+      <div class="card-title mb-12">⚠️ Flagged Joints</div>
+      {% if summary.outliers_high %}
+      <div class="mb-8">
+        <div class="text-xs text-muted mb-4" style="text-transform:uppercase">High Torque Outliers</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">
+          {% for jl in (summary.outliers_high if summary.outliers_high is iterable else []) %}
+          <span class="badge badge-red">{{ jl }}</span>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+      {% if summary.outliers_low %}
+      <div class="mb-8">
+        <div class="text-xs text-muted mb-4" style="text-transform:uppercase">Low Torque Outliers</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">
+          {% for jl in (summary.outliers_low if summary.outliers_low is iterable else []) %}
+          <span class="badge badge-amber">{{ jl }}</span>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+      {% if summary.reruns %}
+      <div>
+        <div class="text-xs text-muted mb-4" style="text-transform:uppercase">Reruns ({{ summary.rerun_count }})</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">
+          {% for jl in (summary.reruns if summary.reruns is iterable else []) %}
+          <span class="badge badge-amber">{{ jl }}</span>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  {% elif selected_job %}
+  <div class="card">
+    <div style="text-align:center;padding:32px;color:var(--text3)">
+      <div style="font-size:32px;margin-bottom:8px">📭</div>
+      <div>No MTT data for this job</div>
+      <a href="/jobs/{{ selected_job.id }}" class="btn btn-primary btn-sm mt-8">Upload MTT →</a>
+    </div>
+  </div>
+  {% else %}
+  <div class="card">
+    <div style="text-align:center;padding:32px;color:var(--text3)">
+      <div style="font-size:40px;margin-bottom:8px">👈</div>
+      <div>Select a job to view analysis</div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+{% if selected_job and summary and joints %}
+<!-- Charts -->
+<div class="grid-2 mb-16">
+  <div class="card">
+    <div class="card-title mb-16">📈 Final Torque per Joint</div>
+    <canvas id="torqueChart" height="220"></canvas>
+  </div>
+  <div class="card">
+    <div class="card-title mb-16">🔄 Final Turns per Joint</div>
+    <canvas id="turnsChart" height="220"></canvas>
+  </div>
+</div>
+
+<div class="grid-2 mb-16">
+  <div class="card">
+    <div class="card-title mb-16">🌀 Shoulder RPM</div>
+    <canvas id="rpmChart" height="180"></canvas>
+  </div>
+  <div class="card">
+    <div class="card-title mb-16">📊 Torque Distribution</div>
+    <canvas id="distChart" height="180"></canvas>
+  </div>
+</div>
+
+<!-- Joints Table -->
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">🔩 All Joints ({{ joints|length }})</div>
+    <div>
+      <input type="text" id="jointSearch" class="form-control" placeholder="Filter joints..."
+             style="width:200px;font-size:12px;padding:5px 10px" oninput="filterJoints(this.value)">
+    </div>
+  </div>
+  <div class="table-wrap" style="max-height:500px;overflow-y:auto">
+    <table>
+      <thead>
+        <tr>
+          <th>Joint</th>
+          <th>Rerun</th>
+          <th>Final Torque</th>
+          <th>Final Turns</th>
+          <th>Shoulder T</th>
+          <th>Shoulder RPM</th>
+          <th>Delta T</th>
+          <th>Delta Turns</th>
+          <th>Lot</th>
+          <th>Datetime</th>
+        </tr>
+      </thead>
+      <tbody id="jointsTableBody">
+        {% for j in joints %}
+        <tr class="joint-row" data-joint="{{ j.joint_label }}">
+          <td class="mono fw-bold">{{ j.joint_label }}</td>
+          <td>{% if j.is_rerun %}<span class="badge badge-amber">R{{ j.run_number }}</span>
+              {% else %}<span class="text-muted text-xs">—</span>{% endif %}
+          </td>
+          <td class="mono">
+            {% set specs = summary.stats_json if summary.stats_json is mapping else {} %}
+            <span class="{{ 'text-red fw-bold' if (specs.max_torque and j.final_torque and j.final_torque > specs.max_torque) or (specs.min_torque and j.final_torque and j.final_torque < specs.min_torque) else 'text-accent' }}">
+              {{ "%.0f"|format(j.final_torque or 0) }}
+            </span>
+          </td>
+          <td class="mono">{{ "%.3f"|format(j.final_turns or 0) }}</td>
+          <td class="mono">{{ "%.0f"|format(j.shoulder_torque or 0) }}</td>
+          <td class="mono {{ 'text-red' if j.shoulder_rpm and j.shoulder_rpm < 2.5 else '' }}">
+            {{ "%.1f"|format(j.shoulder_rpm or 0) }}
+          </td>
+          <td class="mono">{{ "%.0f"|format(j.delta_torque or 0) }}</td>
+          <td class="mono">{{ "%.4f"|format(j.delta_turns or 0) }}</td>
+          <td class="text-xs text-muted">{{ j.lot or '—' }}</td>
+          <td class="text-xs text-muted">{{ j.datetime[:16] if j.datetime else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+{% if joints %}
+const joints = {{ joints | tojson }};
+const summary = {{ summary | tojson }};
+const stats = (summary.stats_json && typeof summary.stats_json === 'object') ? summary.stats_json : {};
+const maxT = stats.max_torque, minT = stats.min_torque, optT = stats.opt_torque;
+
+const normal = joints.filter(j => !j.is_rerun);
+
+// ── Torque Chart
+const tCtx = document.getElementById('torqueChart');
+if (tCtx && normal.length > 0) {
+  const colors = normal.map(j => {
+    if (!j.final_torque) return '#475569';
+    if (maxT && j.final_torque > maxT) return '#ef4444';
+    if (minT && j.final_torque < minT) return '#ef4444';
+    return '#14b8a6';
+  });
+
+  const datasets = [{
+    label: 'Final Torque',
+    data: normal.map(j => j.final_torque),
+    backgroundColor: colors.map(c => c + 'b3'),
+    borderColor: colors,
+    borderWidth: 1, borderRadius: 2,
+  }];
+
+  const annotations = {};
+  if (maxT) annotations.maxLine = { type: 'line', yMin: maxT, yMax: maxT, borderColor: '#ef4444', borderWidth: 1, borderDash: [4,3], label: { content: `Max ${maxT}`, display: true, color: '#ef4444', font: { size: 9 } } };
+  if (minT) annotations.minLine = { type: 'line', yMin: minT, yMax: minT, borderColor: '#ef4444', borderWidth: 1, borderDash: [4,3], label: { content: `Min ${minT}`, display: true, color: '#ef4444', font: { size: 9 } } };
+  if (optT) annotations.optLine = { type: 'line', yMin: optT, yMax: optT, borderColor: '#10b981', borderWidth: 1, borderDash: [4,3], label: { content: `Opt ${optT}`, display: true, color: '#10b981', font: { size: 9 } } };
+
+  new Chart(tCtx, {
+    type: 'bar',
+    data: { labels: normal.map(j => j.joint_num), datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#94a3b8', font: { size: 10 } } },
+        annotation: { annotations }
+      },
+      scales: {
+        x: { ticks: { color: '#64748b', font: { size: 9 }, maxTicksLimit: 25, maxRotation: 0 }, grid: { color: 'rgba(30,48,80,.5)' } },
+        y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: 'rgba(30,48,80,.5)' }, title: { display: true, text: 'ft·lb', color: '#64748b', font: { size: 9 } } }
+      }
+    }
+  });
+}
+
+// ── Turns Chart
+const trCtx = document.getElementById('turnsChart');
+if (trCtx && normal.length > 0) {
+  new Chart(trCtx, {
+    type: 'line',
+    data: {
+      labels: normal.map(j => j.joint_num),
+      datasets: [{
+        label: 'Final Turns', data: normal.map(j => j.final_turns),
+        borderColor: '#06b6d4', backgroundColor: 'rgba(6,182,212,.1)',
+        borderWidth: 2, pointRadius: 2, tension: 0.3, fill: true,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#94a3b8', font: { size: 10 } } } },
+      scales: {
+        x: { ticks: { color: '#64748b', font: { size: 9 }, maxTicksLimit: 25, maxRotation: 0 }, grid: { color: 'rgba(30,48,80,.5)' } },
+        y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: 'rgba(30,48,80,.5)' } }
+      }
+    }
+  });
+}
+
+// ── RPM Chart
+const rCtx = document.getElementById('rpmChart');
+if (rCtx) {
+  const rpmVals = normal.map(j => j.shoulder_rpm);
+  const rpmColors = rpmVals.map(v => v && v < 2.5 ? '#ef4444' : '#8b5cf6');
+  new Chart(rCtx, {
+    type: 'bar',
+    data: {
+      labels: normal.map(j => j.joint_num),
+      datasets: [{ label: 'RPM', data: rpmVals, backgroundColor: rpmColors.map(c => c + 'b3'), borderColor: rpmColors, borderWidth: 1, borderRadius: 2 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#94a3b8', font: { size: 10 } } } },
+      scales: {
+        x: { ticks: { color: '#64748b', font: { size: 9 }, maxTicksLimit: 25, maxRotation: 0 }, grid: { color: 'rgba(30,48,80,.5)' } },
+        y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: 'rgba(30,48,80,.5)' } }
+      }
+    }
+  });
+}
+
+// ── Distribution Chart
+const dCtx = document.getElementById('distChart');
+if (dCtx) {
+  const ftVals = normal.filter(j => j.final_torque).map(j => j.final_torque);
+  if (ftVals.length > 2) {
+    const minV = Math.min(...ftVals), maxV = Math.max(...ftVals);
+    const bins = 12;
+    const binSize = (maxV - minV) / bins;
+    const counts = Array(bins).fill(0);
+    const labels = [];
+    for (let i = 0; i < bins; i++) {
+      labels.push(Math.round(minV + i * binSize));
+      ftVals.forEach(v => { if (v >= minV + i * binSize && v < minV + (i+1) * binSize) counts[i]++; });
+    }
+    new Chart(dCtx, {
+      type: 'bar',
+      data: { labels, datasets: [{ label: 'Count', data: counts, backgroundColor: 'rgba(20,184,166,.6)', borderColor: '#14b8a6', borderWidth: 1, borderRadius: 2 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#94a3b8', font: { size: 10 } } } },
+        scales: {
+          x: { ticks: { color: '#64748b', font: { size: 9 }, maxRotation: 0 }, grid: { color: 'rgba(30,48,80,.5)' }, title: { display: true, text: 'ft·lb', color: '#64748b', font: { size: 9 } } },
+          y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: 'rgba(30,48,80,.5)' } }
+        }
+      }
+    });
+  }
+}
+{% endif %}
+
+function filterJoints(q) {
+  const rows = document.querySelectorAll('.joint-row');
+  q = q.toLowerCase();
+  rows.forEach(r => {
+    r.style.display = r.dataset.joint.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}AI Automation{% endblock %}
+{% block page_title %}🤖 AI Automation Center{% endblock %}
+{% block topbar_actions %}<button class="btn btn-primary btn-sm" id="runAiBtnTop">Run Checks</button>{% endblock %}
+{% block content %}
+<div class="stats-grid">
+  <div class="stat-card cyan"><span class="stat-icon">🤖</span><div class="stat-value">{{ runs|length }}</div><div class="stat-label">Recent Runs</div></div>
+  <div class="stat-card red"><span class="stat-icon">🚨</span><div class="stat-value">{{ notifications|selectattr('level','equalto','critical')|list|length }}</div><div class="stat-label">Critical Alerts</div></div>
+  <div class="stat-card amber"><span class="stat-icon">⚠️</span><div class="stat-value">{{ notifications|selectattr('is_read','equalto',0)|list|length }}</div><div class="stat-label">Unread</div></div>
+  <div class="stat-card green"><span class="stat-icon">✅</span><div class="stat-value">Live</div><div class="stat-label">Offline-safe AI</div></div>
+</div>
+<div class="grid-2" style="align-items:start">
+  <div class="card">
+    <div class="card-header"><div class="card-title">Smart Automation</div><span class="badge badge-cyan">No external API required</span></div>
+    <p class="text-muted mb-16">Runs offline-safe checks: PDF path classification, overdue equipment alerts, missing Excel sources, and platform notifications.</p>
+    <button class="btn btn-primary" id="runAiBtn">Run AI Automation Now</button>
+    <pre id="aiResult" class="mono" style="margin-top:16px;white-space:pre-wrap;background:rgba(0,0,0,.22);padding:14px;border-radius:12px;border:1px solid var(--border);min-height:140px;max-height:360px;overflow:auto">Ready.</pre>
+  </div>
+  <div class="card">
+    <div class="card-header"><div class="card-title">Recent Notifications</div><button class="btn btn-secondary btn-sm" id="markAllRead">Mark all read</button></div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      {% for n in notifications %}
+      <div style="padding:10px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.03)">
+        <div class="fw-bold"><span class="badge badge-{{ 'red' if n.level=='critical' else 'amber' if n.level=='warning' else 'blue' }}">{{ n.level|upper }}</span> {{ n.title }}</div>
+        <div class="text-muted text-sm">{{ n.message }}</div>
+        <div class="text-muted text-xs mono">{{ n.created_at }}</div>
+      </div>
+      {% else %}
+      <div class="text-muted">No notifications yet.</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+<div class="card mt-16">
+  <div class="card-header"><div class="card-title">Automation Runs</div></div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Time</th><th>Status</th><th>Summary</th></tr></thead>
+    <tbody>{% for r in runs %}<tr><td class="mono">{{ r.created_at }}</td><td><span class="badge badge-green">{{ r.status }}</span></td><td>{{ r.summary }}</td></tr>{% else %}<tr><td colspan="3" class="text-muted">No runs yet.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function runAI(){
+  const out = document.getElementById('aiResult');
+  out.textContent = 'Running automation...';
+  const res = await fetch('/api/ai-automation/run', {method:'POST'});
+  const data = await res.json();
+  out.textContent = JSON.stringify(data, null, 2);
+  toast(data.summary || 'AI automation completed', data.ok ? 'success' : 'error', 3500);
+}
+document.getElementById('runAiBtn')?.addEventListener('click', runAI);
+document.getElementById('runAiBtnTop')?.addEventListener('click', runAI);
+document.getElementById('markAllRead')?.addEventListener('click', async()=>{
+  await fetch('/api/notifications/read-all', {method:'POST'});
+  toast('Notifications marked as read','success');
+});
+if (window.TRSRealtime) { TRSRealtime.connect('all'); TRSRealtime.injectStatusBadge(); }
+</script>
+{% endblock %}
