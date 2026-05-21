@@ -50,3 +50,9 @@ secrets.json
 
 # ── Render ─────────────────────────────────
 .render/
+
+# Google Drive OAuth backup secrets
+google_drive_credentials.json
+google_drive_token.json
+client_secret*.json
+local_backups/

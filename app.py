@@ -29,6 +29,8 @@ from services.firestore_service import (
 from services.cloudinary_service import (
     cl_enabled, upload_mtt_original, upload_report_pdf
 )
+from services.cloud_db_backup import restore_db_from_cloud, backup_now
+from services.google_drive_backup import start_daily_scheduler as start_google_drive_backup_scheduler
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -177,6 +179,13 @@ async def startup():
         except Exception as e:
             logger.warning(f"mkdir failed: {d} — {e}")
 
+    # On Render/free hosts the local disk may reset. Restore the latest SQLite backup
+    # from Cloudinary before initializing schema so Excel edits and activity log persist.
+    try:
+        restore_db_from_cloud(DB_PATH)
+    except Exception as e:
+        logger.warning(f"Cloud DB restore skipped: {e}")
+
     init_db()
     try:
         ensure_hpu_sample_present()
@@ -199,6 +208,16 @@ async def startup():
 
     if cl_enabled():
         logger.info("Cloudinary connected - PDF storage active")
+        try:
+            backup_now(DB_PATH)
+        except Exception as e:
+            logger.warning(f"Initial cloud DB backup skipped: {e}")
+
+    # Optional Google Drive daily ZIP backup. Enable with TRS_GOOGLE_DRIVE_BACKUP=1
+    try:
+        start_google_drive_backup_scheduler(base_dir=BASE_DIR, db_path=DB_PATH)
+    except Exception as e:
+        logger.warning(f"Google Drive backup scheduler skipped: {e}")
 
 
 # ══════════════════════════════════════════════════════════════
@@ -1066,6 +1085,282 @@ def get_equipment_sheet_matrix(equipment_id: int, min_rows: int = 20, min_cols: 
     return {"meta": meta, "rows": matrix, "max_row": max_row, "max_col": max_col, "cols": [excel_col_name(i) for i in range(1, max_col+1)]}
 
 
+def get_equipment_quick_form_view(equipment_id: int) -> dict:
+    """Build a simple form/table view from the imported Excel cells.
+
+    It detects the most likely header row from the first 25 rows and turns
+    the columns into normal form fields so users can add/edit/delete records
+    without editing the full Excel grid.
+    """
+    meta = q1("SELECT * FROM trs_equipment_sheets WHERE equipment_id=?", (equipment_id,)) or {}
+    cells = qa("SELECT row_index, col_index, value FROM trs_equipment_sheet_cells WHERE equipment_id=? ORDER BY row_index, col_index", (equipment_id,))
+    if not cells:
+        return {"headers": [], "rows": [], "header_row": 1, "next_row": 1, "max_col": 0}
+
+    by_row: dict[int, dict[int, str]] = {}
+    max_row = int(meta.get("max_row") or 0)
+    max_col = int(meta.get("max_col") or 0)
+    for c in cells:
+        r = int(c["row_index"]); col = int(c["col_index"]); v = str(c.get("value") or "").strip()
+        max_row = max(max_row, r); max_col = max(max_col, col)
+        by_row.setdefault(r, {})[col] = v
+
+    # choose header row: first row with at least 2 useful text cells, otherwise row 1
+    header_row = 1
+    best_score = -1
+    for r in range(1, min(max_row, 25) + 1):
+        vals = [v for v in by_row.get(r, {}).values() if str(v).strip()]
+        score = len(vals)
+        joined = " ".join(vals).lower()
+        if any(k in joined for k in ["date", "service", "inspection", "description", "done", "remarks", "notes", "status"]):
+            score += 3
+        if score > best_score and len(vals) >= 2:
+            best_score = score
+            header_row = r
+
+    headers = []
+    used_names = set()
+    for col in range(1, max_col + 1):
+        name = (by_row.get(header_row, {}).get(col) or "").strip()
+        if not name:
+            # skip completely empty columns around logos/spacing
+            has_data = any((by_row.get(r, {}).get(col) or "").strip() for r in range(header_row + 1, max_row + 1))
+            if not has_data:
+                continue
+            name = f"Column {excel_col_name(col)}"
+        name = re.sub(r"\s+", " ", name).strip()[:80]
+        base = name
+        i = 2
+        while name.lower() in used_names:
+            name = f"{base} {i}"; i += 1
+        used_names.add(name.lower())
+        headers.append({"col": col, "name": name})
+
+    rows = []
+    for r in range(header_row + 1, max_row + 1):
+        values = []
+        has_any = False
+        for h in headers:
+            val = by_row.get(r, {}).get(h["col"], "")
+            if str(val).strip():
+                has_any = True
+            values.append({"col": h["col"], "name": h["name"], "value": val})
+        if has_any:
+            rows.append({"row_index": r, "values": values})
+
+    return {"headers": headers, "rows": rows[-80:], "header_row": header_row, "next_row": max_row + 1, "max_col": max_col}
+
+
+
+
+def _compact_label(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", (value or "").lower())
+
+
+def get_equipment_maintenance_wizard_view(equipment_id: int) -> dict:
+    """Build a guided maintenance-entry form that writes back to the imported Excel columns.
+
+    It reads the real Excel headers from the sheet and maps the requested business fields:
+    Sl.no → Maintenance Details → Spare Part Number Used → Spare Part Type
+    → Type Of Maintenance → Total Working HRS → Work Order No.
+    → Date & Time Finished Maintenance → Maintained By.
+    """
+    quick = get_equipment_quick_form_view(equipment_id)
+    cells = qa("SELECT row_index, col_index, value FROM trs_equipment_sheet_cells WHERE equipment_id=? ORDER BY row_index, col_index", (equipment_id,))
+    meta = q1("SELECT * FROM trs_equipment_sheets WHERE equipment_id=?", (equipment_id,)) or {}
+    max_row = int(meta.get("max_row") or 0)
+    by_row: dict[int, dict[int, str]] = {}
+    by_col_text: dict[int, str] = {}
+    for c in cells:
+        r = int(c["row_index"]); col = int(c["col_index"]); val = str(c.get("value") or "").strip()
+        max_row = max(max_row, r)
+        by_row.setdefault(r, {})[col] = val
+        if r <= 15 and val:
+            by_col_text[col] = (by_col_text.get(col, "") + " " + val).strip()
+
+    def find_col(*aliases: str):
+        aliases_c = [_compact_label(a) for a in aliases]
+        # Prefer detected quick headers first.
+        for h in quick.get("headers", []):
+            label = _compact_label(h.get("name", ""))
+            if any(a and a in label for a in aliases_c):
+                return int(h["col"])
+        # Then inspect all visible top rows, including merged/grouped headers.
+        best = None
+        best_score = -1
+        for col, txt in by_col_text.items():
+            label = _compact_label(txt)
+            score = 0
+            for a in aliases_c:
+                if a and a in label:
+                    score = max(score, len(a))
+            if score > best_score:
+                best_score = score; best = col
+        return int(best) if best_score > 0 and best is not None else None
+
+    fields = [
+        {"key":"sl_no", "label":"Sl.no", "type":"text", "col":find_col("sl.no", "sl no", "slno", "serial", "s/n")},
+        {"key":"maintenance_details", "label":"Maintenance Details", "type":"textarea", "col":find_col("maintenance details", "details", "description", "maintenance description")},
+        {"key":"spare_part_number_used", "label":"Spare Part Number Used", "type":"text", "col":find_col("spare part number used", "spare part no", "spare part number", "part number", "part no")},
+        {"key":"spare_part_type", "label":"Spare Part Type", "type":"choice", "options":[
+            {"key":"local", "label":"Local", "col":find_col("local")},
+            {"key":"std", "label":"Std", "col":find_col("std", "standard")},
+            {"key":"etc", "label":"Etc", "col":find_col("etc", "other")},
+        ]},
+        {"key":"type_of_maintenance", "label":"Type Of Maintenance", "type":"choice", "options":[
+            {"key":"preventive", "label":"Preventive", "col":find_col("preventive", "preventative", "perventive")},
+            {"key":"corrective", "label":"Corrective", "col":find_col("corrective")},
+        ]},
+        {"key":"total_working_hrs", "label":"Total Working HRS", "type":"number", "col":find_col("total working hrs", "working hrs", "working hours", "total hrs")},
+        {"key":"work_order_no", "label":"Work Order No.", "type":"text", "col":find_col("work order no", "work order", "wo no", "w o no")},
+        {"key":"date_time_finished", "label":"Date & Time Finished Maintenance", "type":"datetime", "col":find_col("date time finish", "date & time finish", "date and time finish", "finished maintenance", "finish maintenance")},
+        {"key":"maintained_by", "label":"Maintained By", "type":"text", "col":find_col("maintained by", "maintenance by", "performed by", "done by", "technician")},
+    ]
+
+    # Some Excel templates use merged group headers. In that case only the last
+    # sub-column may be detected from OCR/HTML import (for example Corrective),
+    # so infer the neighboring columns from the original sheet layout.
+    def _get_choice(field_key: str, option_key: str):
+        f = next((x for x in fields if x.get("key") == field_key), None)
+        if not f:
+            return None
+        return next((o for o in f.get("options", []) if o.get("key") == option_key), None)
+
+    def _set_choice_col(field_key: str, option_key: str, col):
+        if not col or int(col) <= 0:
+            return
+        opt = _get_choice(field_key, option_key)
+        if opt and not opt.get("col"):
+            opt["col"] = int(col)
+
+    local = (_get_choice("spare_part_type", "local") or {}).get("col")
+    std = (_get_choice("spare_part_type", "std") or {}).get("col")
+    etc = (_get_choice("spare_part_type", "etc") or {}).get("col")
+    if etc:
+        _set_choice_col("spare_part_type", "std", int(etc) - 1)
+        _set_choice_col("spare_part_type", "local", int(etc) - 2)
+    elif std:
+        _set_choice_col("spare_part_type", "local", int(std) - 1)
+        _set_choice_col("spare_part_type", "etc", int(std) + 1)
+    elif local:
+        _set_choice_col("spare_part_type", "std", int(local) + 1)
+        _set_choice_col("spare_part_type", "etc", int(local) + 2)
+
+    preventive = (_get_choice("type_of_maintenance", "preventive") or {}).get("col")
+    corrective = (_get_choice("type_of_maintenance", "corrective") or {}).get("col")
+    if corrective:
+        _set_choice_col("type_of_maintenance", "preventive", int(corrective) - 1)
+    elif preventive:
+        _set_choice_col("type_of_maintenance", "corrective", int(preventive) + 1)
+
+    def cell_value(row: int, col):
+        if not col:
+            return ""
+        return by_row.get(row, {}).get(int(col), "")
+
+    def selected_choice(row: int, field: dict) -> str:
+        for opt in field.get("options", []):
+            v = str(cell_value(row, opt.get("col"))).strip()
+            if v and v not in ["-", "—"]:
+                return opt["key"]
+        return ""
+
+    # Real data starts after the grouped header row and the sub-header row
+    # (for this maintenance template: row 7 group titles, row 8 Local/Std/Etc/Preventive/Corrective).
+    data_start_row = int((quick.get("header_row") or 1)) + 2
+    header_words = {"local", "std", "etc", "preventive", "corrective", "sl.no", "sl no", "maintenance details", "spare part type", "type of maintenance", "total working hrs", "work order no", "date & time finish", "date time finish", "maintained by"}
+
+    def _is_header_value(v: str) -> bool:
+        return re.sub(r"\s+", " ", str(v or "").strip().lower()) in header_words
+
+    rows = []
+    for r in quick.get("rows", [])[-120:]:
+        row_index = int(r["row_index"])
+        if row_index < data_start_row:
+            continue
+        item = {"row_index": row_index, "values": {}}
+        has_any = False
+        for f in fields:
+            if f["type"] == "choice":
+                val = selected_choice(row_index, f)
+                display = next((o["label"] for o in f.get("options", []) if o["key"] == val), "")
+                item["values"][f["key"]] = {"value": val, "display": display}
+                if val: has_any = True
+            else:
+                val = cell_value(row_index, f.get("col"))
+                if _is_header_value(val):
+                    val = ""
+                item["values"][f["key"]] = {"value": val, "display": val}
+                if str(val).strip(): has_any = True
+        if has_any:
+            rows.append(item)
+
+    mapped_cols = []
+    for f in fields:
+        if f["type"] == "choice":
+            mapped_cols.extend([o.get("col") for o in f.get("options", []) if o.get("col")])
+        elif f.get("col"):
+            mapped_cols.append(f.get("col"))
+
+    # Pick the first empty maintenance row in the actual Excel area instead of
+    # jumping to the end of the imported sheet. This makes the next entry write
+    # to row 9, then row 10, etc. when the template has empty prepared rows.
+    mapped_cols_i = [int(c) for c in mapped_cols if c]
+    first_empty = None
+    scan_limit = max(max_row + 2, data_start_row + 50)
+    for rr in range(data_start_row, scan_limit + 1):
+        if not any(str(by_row.get(rr, {}).get(c, "")).strip() for c in mapped_cols_i):
+            first_empty = rr
+            break
+    if first_empty is None:
+        first_empty = max_row + 1
+
+    return {
+        "fields": fields,
+        "rows": rows[-80:],
+        "next_row": first_empty,
+        "header_row": quick.get("header_row") or 1,
+        "data_start_row": data_start_row,
+        "max_col": quick.get("max_col") or 1,
+        "ready": bool(mapped_cols),
+    }
+
+
+def apply_equipment_maintenance_wizard_form(equipment_id: int, row_index: int, form, user_id: int | None):
+    wizard = get_equipment_maintenance_wizard_view(equipment_id)
+    for f in wizard.get("fields", []):
+        if f.get("type") == "choice":
+            selected = str(form.get(f"wizard_{f['key']}") or "").strip()
+            for opt in f.get("options", []):
+                col = opt.get("col")
+                if not col:
+                    continue
+                upsert_equipment_sheet_cell(equipment_id, row_index, int(col), "✓" if selected == opt.get("key") else "", user_id)
+        else:
+            col = f.get("col")
+            if not col:
+                continue
+            upsert_equipment_sheet_cell(equipment_id, row_index, int(col), str(form.get(f"wizard_{f['key']}") or ""), user_id)
+    return wizard
+
+
+def upsert_equipment_sheet_cell(equipment_id: int, row: int, col: int, value: str, user_id: int | None):
+    value = (value or "").strip()
+    if value == "":
+        qx("DELETE FROM trs_equipment_sheet_cells WHERE equipment_id=? AND row_index=? AND col_index=?", (equipment_id, row, col))
+    else:
+        qx("""
+            INSERT INTO trs_equipment_sheet_cells (equipment_id,row_index,col_index,value,updated_by,updated_at)
+            VALUES (?,?,?,?,?,datetime('now'))
+            ON CONFLICT(equipment_id,row_index,col_index) DO UPDATE SET
+              value=excluded.value, updated_by=excluded.updated_by, updated_at=datetime('now')
+        """, (equipment_id, row, col, value, user_id))
+    try:
+        write_equipment_cell_to_source(equipment_id, row, col, value)
+    except Exception as e:
+        logger.debug(f"Source Excel quick-form save skipped: {e}")
+
+
 # ══════════════════════════════════════════════════════════════
 #  TRS PLATFORM MODULES — Job Files + Equipment Maintenance
 # ══════════════════════════════════════════════════════════════
@@ -1463,7 +1758,9 @@ async def equipment_detail(request: Request, equipment_id: int):
     """, (equipment_id,))
     sheet = get_equipment_sheet_matrix(equipment_id)
     sheet["html"] = render_styled_equipment_sheet_html(equipment_id, eq)
-    return render(request, "equipment_detail.html", {"active":"equipment", "eq": eq, "logs": logs, "sheet": sheet})
+    quick_form = get_equipment_quick_form_view(equipment_id)
+    maintenance_wizard = get_equipment_maintenance_wizard_view(equipment_id)
+    return render(request, "equipment_detail.html", {"active":"equipment", "eq": eq, "logs": logs, "sheet": sheet, "quick_form": quick_form, "maintenance_wizard": maintenance_wizard})
 
 
 @app.post("/equipment-maintenance/{equipment_id}/update")
@@ -1570,6 +1867,83 @@ async def equipment_delete(request: Request, equipment_id: int):
         log_activity("equipment_delete", user["id"], "trs_equipment", equipment_id, f"Deleted equipment {eq.get('name') or equipment_id}")
         await ws_manager.broadcast({"type":"equipment_delete", "equipment_id": equipment_id}, "equipment")
     return RedirectResponse("/equipment-maintenance", status_code=303)
+
+
+@app.post("/equipment-maintenance/{equipment_id}/quick-row/create")
+async def equipment_quick_row_create(request: Request, equipment_id: int):
+    user, redir = require_user(request)
+    if redir: return redir
+    eq = q1("SELECT * FROM trs_equipment WHERE id=?", (equipment_id,))
+    if not eq:
+        return RedirectResponse("/equipment-maintenance", status_code=303)
+    form = await request.form()
+    quick = get_equipment_quick_form_view(equipment_id)
+    if str(form.get("wizard_mode") or "") == "1":
+        wizard_view = get_equipment_maintenance_wizard_view(equipment_id)
+        new_row = int(form.get("row_index") or wizard_view.get("next_row") or quick.get("next_row") or 1)
+        if new_row < int(wizard_view.get("data_start_row") or (quick.get("header_row") or 1)):
+            new_row = int(wizard_view.get("next_row") or new_row)
+        wiz = apply_equipment_maintenance_wizard_form(equipment_id, new_row, form, user["id"])
+        max_col = int(wiz.get("max_col") or quick.get("max_col") or 1)
+    else:
+        new_row = int(form.get("row_index") or quick.get("next_row") or 1)
+        if new_row <= int(quick.get("header_row") or 1):
+            new_row = int(quick.get("next_row") or 1)
+        for h in quick.get("headers", []):
+            col = int(h["col"])
+            upsert_equipment_sheet_cell(equipment_id, new_row, col, str(form.get(f"col_{col}") or ""), user["id"])
+        max_col = int(quick.get("max_col") or 1)
+    qx("INSERT OR REPLACE INTO trs_equipment_sheets (equipment_id,sheet_name,max_row,max_col,updated_by,updated_at) VALUES (?,COALESCE((SELECT sheet_name FROM trs_equipment_sheets WHERE equipment_id=?),'Live Sheet'),?,?,?,datetime('now'))",
+       (equipment_id, equipment_id, max(new_row, int(quick.get("next_row") or new_row)), max_col, user["id"]))
+    log_activity("equipment_quick_row_create", user["id"], "trs_equipment", equipment_id, f"Added simple entry row {new_row}")
+    await ws_manager.broadcast({"type":"equipment_sheet_row_add", "equipment_id": equipment_id, "by": user.get("full_name") or user.get("username")}, "equipment")
+    return RedirectResponse(f"/equipment-maintenance/{equipment_id}?saved=1", status_code=303)
+
+
+@app.post("/equipment-maintenance/{equipment_id}/quick-row/{row_index}/update")
+async def equipment_quick_row_update(request: Request, equipment_id: int, row_index: int):
+    user, redir = require_user(request)
+    if redir: return redir
+    eq = q1("SELECT * FROM trs_equipment WHERE id=?", (equipment_id,))
+    if not eq:
+        return RedirectResponse("/equipment-maintenance", status_code=303)
+    form = await request.form()
+    quick = get_equipment_quick_form_view(equipment_id)
+    if str(form.get("wizard_mode") or "") == "1":
+        apply_equipment_maintenance_wizard_form(equipment_id, row_index, form, user["id"])
+    else:
+        for h in quick.get("headers", []):
+            col = int(h["col"])
+            upsert_equipment_sheet_cell(equipment_id, row_index, col, str(form.get(f"col_{col}") or ""), user["id"])
+    log_activity("equipment_quick_row_update", user["id"], "trs_equipment", equipment_id, f"Updated simple entry row {row_index}")
+    await ws_manager.broadcast({"type":"equipment_sheet_update", "equipment_id": equipment_id, "by": user.get("full_name") or user.get("username")}, "equipment")
+    return RedirectResponse(f"/equipment-maintenance/{equipment_id}?updated=1", status_code=303)
+
+
+@app.post("/equipment-maintenance/{equipment_id}/quick-row/{row_index}/delete")
+async def equipment_quick_row_delete(request: Request, equipment_id: int, row_index: int):
+    user, redir = require_user(request)
+    if redir: return redir
+    # Clear only the mapped maintenance-entry columns in DB and in the original Excel,
+    # so the visual workbook stays synchronized with Add/Edit/Delete actions.
+    try:
+        wiz = get_equipment_maintenance_wizard_view(equipment_id)
+        cols = []
+        for f in wiz.get("fields", []):
+            if f.get("type") == "choice":
+                cols.extend([o.get("col") for o in f.get("options", []) if o.get("col")])
+            elif f.get("col"):
+                cols.append(f.get("col"))
+        cols = sorted({int(c) for c in cols if c})
+        for col in cols:
+            upsert_equipment_sheet_cell(equipment_id, row_index, col, "", user["id"])
+    except Exception as e:
+        logger.debug(f"Wizard delete source clear skipped: {e}")
+        qx("DELETE FROM trs_equipment_sheet_cells WHERE equipment_id=? AND row_index=?", (equipment_id, row_index))
+    log_activity("equipment_quick_row_delete", user["id"], "trs_equipment", equipment_id, f"Deleted simple entry row {row_index}")
+    await ws_manager.broadcast({"type":"equipment_sheet_update", "equipment_id": equipment_id, "by": user.get("full_name") or user.get("username")}, "equipment")
+    return RedirectResponse(f"/equipment-maintenance/{equipment_id}?deleted=1", status_code=303)
+
 
 @app.get("/equipment-maintenance/{equipment_id}/sheet.json")
 async def equipment_sheet_json(request: Request, equipment_id: int):

@@ -6,6 +6,7 @@ import sqlite3
 import logging
 from pathlib import Path
 from config.settings import DB_PATH, ADMIN_INIT_PASS, BASE_DIR, UPLOADS_DIR
+from services.cloud_db_backup import request_db_backup
 
 logger = logging.getLogger(__name__)
 
@@ -378,7 +379,12 @@ def qx(sql: str, params: tuple = ()) -> int:
     try:
         cur = conn.execute(sql, params)
         conn.commit()
-        return cur.lastrowid
+        last_id = cur.lastrowid
+        try:
+            request_db_backup(DB_PATH)
+        except Exception as e:
+            logger.debug(f"Cloud DB backup request skipped: {e}")
+        return last_id
     finally:
         conn.close()
 

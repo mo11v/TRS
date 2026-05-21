@@ -12,6 +12,12 @@
 <style>
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.form-grid label{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px}.form-grid input,.form-grid textarea,.form-grid select{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:9px 10px;margin-top:5px}@media(max-width:900px){.form-grid{grid-template-columns:1fr}}
 .equipment-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}.equipment-grid .card{min-width:0}.sheet-launch-card{margin-top:18px;background:linear-gradient(135deg,rgba(20,184,166,.08),rgba(59,130,246,.06));border-color:rgba(20,184,166,.28)}.sheet-shell{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#07111f;max-width:100%}.sheet-toolbar{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.025);flex-wrap:wrap}.sheet-status{font-size:12px;color:var(--text3)}.sheet-wrap{overflow:auto;max-height:70vh;max-width:100%}.sheet-table{border-collapse:collapse;width:max-content;min-width:100%;font-size:12px}.sheet-table th{position:sticky;top:0;z-index:2;background:#0f1f35;color:#8fb4df;border:1px solid #243a5a;padding:6px;min-width:120px;text-align:center}.sheet-table th.row-h{left:0;z-index:3;min-width:46px;width:46px}.sheet-table td.row-num{position:sticky;left:0;background:#0f1f35;color:#8fb4df;text-align:center;border:1px solid #243a5a;font-family:'JetBrains Mono',monospace}.sheet-cell{min-width:120px;height:34px;border:1px solid #1e3050;padding:6px 8px;background:#050d1a;color:#e2e8f0;outline:none;white-space:pre-wrap}.sheet-cell:focus{background:#092038;box-shadow:inset 0 0 0 2px var(--accent)}.sheet-cell.dirty{background:rgba(20,184,166,.12)}.sheet-cell.saved{animation:savedFlash 900ms ease}@keyframes savedFlash{0%{background:rgba(16,185,129,.28)}100%{background:#050d1a}}.pill-live{display:inline-flex;gap:6px;align-items:center}.pill-dot{width:8px;height:8px;border-radius:999px;background:var(--green);box-shadow:0 0 10px var(--green)}.sheet-modal{max-width:96vw;width:96vw;height:88vh;display:flex;flex-direction:column}.sheet-modal .modal-body{flex:1;min-height:0;overflow:hidden}.sheet-modal .sheet-shell{height:100%;display:flex;flex-direction:column}.sheet-modal .sheet-wrap{flex:1;max-height:none}.source-note{font-size:12px;color:var(--text3);line-height:1.6;margin-top:8px}.excel-preview-table{border-collapse:collapse;width:max-content;min-width:100%;background:#fff;color:#111;font-family:Calibri,Arial,sans-serif;font-size:12px}.excel-preview-table .xl-head,.excel-preview-table .xl-corner{position:sticky;top:0;z-index:4;background:#f3f6fb;color:#334155;border:1px solid #cbd5e1;padding:4px 6px;text-align:center;font-weight:700}.excel-preview-table .xl-corner{left:0;z-index:5}.excel-preview-table .row-num{position:sticky;left:0;z-index:3;background:#f3f6fb;color:#334155;border:1px solid #cbd5e1;text-align:center;font-weight:700}.excel-preview-table .xl-cell{border:1px solid #bfc7d5;min-width:65px;min-height:22px;padding:4px 6px;background:#fff;color:#111;outline:none}.excel-preview-table .xl-cell:focus{box-shadow:inset 0 0 0 2px var(--accent);position:relative;z-index:2}.excel-logo{max-width:180px;max-height:70px;object-fit:contain;display:block;margin:4px auto}.xl-checkbox{border:1px solid #64748b;background:#fff;color:#0f172a;border-radius:4px;min-width:26px;height:24px;font-size:18px;line-height:20px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}.xl-checkbox:hover{box-shadow:0 0 0 2px rgba(20,184,166,.25)}.checkbox-cell{text-align:center!important;vertical-align:middle!important}.sheet-wrap.excel-surface{background:#e5e7eb;padding:10px}@media(max-width:1000px){.equipment-grid{grid-template-columns:1fr}}
+
+.quick-entry-card{margin-top:18px;border-color:rgba(59,130,246,.25);background:linear-gradient(135deg,rgba(59,130,246,.06),rgba(20,184,166,.04))}.quick-entry-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap}.quick-entry-table th,.quick-entry-table td{vertical-align:top}.quick-entry-table input,.quick-entry-form input,.quick-entry-form textarea{width:100%;min-width:140px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 9px}.quick-entry-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}.quick-entry-grid label{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px}.quick-entry-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.quick-empty{border:1px dashed var(--border2);border-radius:12px;padding:18px;color:var(--text3);text-align:center}.row-action-form{display:inline}
+@media(max-width:900px){.quick-entry-table-wrap{display:none}.quick-entry-mobile{display:block}.quick-row-card{border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;background:rgba(255,255,255,.03)}.quick-row-card .kv{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid var(--border);padding:7px 0;font-size:12px}.quick-row-card .kv:last-child{border-bottom:0}.quick-row-card b{color:var(--text2);font-weight:600}.quick-row-card span{text-align:right}}@media(min-width:901px){.quick-entry-mobile{display:none}}
+
+.wizard-panel{border:1px solid rgba(20,184,166,.25);border-radius:14px;background:rgba(5,13,26,.55);padding:14px}.wizard-step{display:none}.wizard-step.active{display:block}.wizard-step-title{font-size:18px;font-weight:800;margin-bottom:6px;color:var(--text)}.wizard-step-hint{font-size:12px;color:var(--text3);margin-bottom:14px}.wizard-input,.wizard-textarea,.wizard-select{width:100%;background:var(--bg);border:1px solid var(--border2);color:var(--text);border-radius:12px;padding:13px 14px;font-size:15px;outline:none}.wizard-textarea{min-height:120px;resize:vertical}.wizard-input:focus,.wizard-textarea:focus,.wizard-select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(20,184,166,.1)}.wizard-choice-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}.wizard-choice{display:flex;align-items:center;gap:10px;border:1px solid var(--border2);border-radius:12px;padding:14px;background:rgba(255,255,255,.035);cursor:pointer}.wizard-choice input{accent-color:var(--accent);width:18px;height:18px}.wizard-actions{display:flex;justify-content:space-between;gap:10px;margin-top:18px;flex-wrap:wrap}.wizard-progress{height:6px;background:var(--border);border-radius:999px;overflow:hidden;margin:8px 0 16px}.wizard-progress span{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--blue));width:0%;transition:.2s}.maintenance-entry-table th,.maintenance-entry-table td{white-space:nowrap}.maintenance-entry-table td.details-cell{white-space:normal;min-width:240px}.entry-pill{display:inline-flex;padding:2px 8px;border-radius:999px;background:rgba(20,184,166,.12);color:var(--accent);border:1px solid rgba(20,184,166,.25);font-size:11px;font-weight:700}.wizard-modal{width:min(760px,96vw)}
+
 </style>
 {% endblock %}
 {% block content %}
@@ -43,6 +49,134 @@
     </tbody></table></div>
   </div>
 </div>
+
+
+<div class="card quick-entry-card">
+  <div class="quick-entry-head mb-16">
+    <div>
+      <div class="card-title">📝 Simple Maintenance Entry</div>
+      <div class="source-note">Guided entry matching the maintenance sheet: enter each item step-by-step, then save it directly into the Excel-backed register.</div>
+    </div>
+    {% if maintenance_wizard.ready %}
+    <button class="btn btn-primary btn-sm" type="button" onclick="openWizard('quickAddModal')">＋ Add Maintenance</button>
+    {% endif %}
+  </div>
+
+  {% if maintenance_wizard.ready %}
+    <div class="quick-entry-table-wrap table-wrap">
+      <table class="quick-entry-table maintenance-entry-table">
+        <thead>
+          <tr>
+            <th>Sl.no</th>
+            <th>Maintenance Details</th>
+            <th>Spare Part No.</th>
+            <th>Spare Type</th>
+            <th>Maintenance Type</th>
+            <th>Total HRS</th>
+            <th>Work Order</th>
+            <th>Finished</th>
+            <th>Maintained By</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in maintenance_wizard.rows[-12:] %}
+          <tr>
+            <td class="mono">{{ r["values"].sl_no.display or '—' }}</td>
+            <td class="details-cell">{{ r["values"].maintenance_details.display or '—' }}</td>
+            <td>{{ r["values"].spare_part_number_used.display or '—' }}</td>
+            <td>{% if r["values"].spare_part_type.display %}<span class="entry-pill">{{ r["values"].spare_part_type.display }}</span>{% else %}—{% endif %}</td>
+            <td>{% if r["values"].type_of_maintenance.display %}<span class="entry-pill">{{ r["values"].type_of_maintenance.display }}</span>{% else %}—{% endif %}</td>
+            <td>{{ r["values"].total_working_hrs.display or '—' }}</td>
+            <td>{{ r["values"].work_order_no.display or '—' }}</td>
+            <td>{{ r["values"].date_time_finished.display or '—' }}</td>
+            <td>{{ r["values"].maintained_by.display or '—' }}</td>
+            <td>
+              <div class="quick-entry-actions">
+                <button class="btn btn-secondary btn-sm" type="button" onclick="openWizard('quickEdit{{ r.row_index }}')">Edit</button>
+                <form class="row-action-form" method="post" action="/equipment-maintenance/{{ eq.id }}/quick-row/{{ r.row_index }}/delete" onsubmit="return confirm('Delete this maintenance entry?')"><button class="btn btn-red btn-sm" type="submit">Delete</button></form>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="10" style="text-align:center;padding:24px;color:var(--text3)">No maintenance entries yet. Add the first maintenance record.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="quick-entry-mobile">
+      {% for r in maintenance_wizard.rows[-12:] %}
+      <div class="quick-row-card">
+        <div class="kv"><b>Sl.no</b><span>{{ r["values"].sl_no.display or '—' }}</span></div>
+        <div class="kv"><b>Details</b><span>{{ r["values"].maintenance_details.display or '—' }}</span></div>
+        <div class="kv"><b>Spare Part No.</b><span>{{ r["values"].spare_part_number_used.display or '—' }}</span></div>
+        <div class="kv"><b>Spare Type</b><span>{{ r["values"].spare_part_type.display or '—' }}</span></div>
+        <div class="kv"><b>Maintenance Type</b><span>{{ r["values"].type_of_maintenance.display or '—' }}</span></div>
+        <div class="kv"><b>Finished</b><span>{{ r["values"].date_time_finished.display or '—' }}</span></div>
+        <div class="kv"><b>Maintained By</b><span>{{ r["values"].maintained_by.display or '—' }}</span></div>
+        <div class="quick-entry-actions mt-8">
+          <button class="btn btn-secondary btn-sm" type="button" onclick="openWizard('quickEdit{{ r.row_index }}')">Edit</button>
+          <form class="row-action-form" method="post" action="/equipment-maintenance/{{ eq.id }}/quick-row/{{ r.row_index }}/delete" onsubmit="return confirm('Delete this maintenance entry?')"><button class="btn btn-red btn-sm" type="submit">Delete</button></form>
+        </div>
+      </div>
+      {% else %}
+      <div class="quick-empty">No maintenance entries yet. Add the first maintenance record.</div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="quick-empty">Maintenance columns were not detected yet. Import the original Excel first or open Live Sync once to load the sheet.</div>
+  {% endif %}
+</div>
+
+{% macro wizard_form(modal_id, action_url, title, row=None) %}
+<div id="{{ modal_id }}" class="modal-overlay"><div class="modal wizard-modal"><form method="post" action="{{ action_url }}" class="maintenance-wizard-form">
+  <input type="hidden" name="wizard_mode" value="1">
+  <div class="modal-header"><div class="modal-title">{{ title }}</div><button type="button" class="modal-close" onclick="closeModal('{{ modal_id }}')">×</button></div>
+  <div class="modal-body">
+    <div class="wizard-progress"><span></span></div>
+    {% for f in maintenance_wizard.fields %}
+      <div class="wizard-step" data-step="{{ loop.index0 }}">
+        <div class="wizard-step-title">{{ f.label }}</div>
+        <div class="wizard-step-hint">Step {{ loop.index }} of {{ maintenance_wizard.fields|length }}</div>
+        {% if f.type == 'textarea' %}
+          <textarea class="wizard-textarea" name="wizard_{{ f.key }}" placeholder="Enter {{ f.label }}">{{ row["values"][f.key].value if row else '' }}</textarea>
+        {% elif f.type == 'choice' %}
+          <div class="wizard-choice-grid">
+            {% for opt in f.options %}
+              {% if opt.col %}
+              <label class="wizard-choice"><input type="radio" name="wizard_{{ f.key }}" value="{{ opt.key }}" {% if row and row["values"][f.key].value == opt.key %}checked{% endif %}> <span>{{ opt.label }}</span></label>
+              {% endif %}
+            {% endfor %}
+          </div>
+          {% if not f.options|selectattr('col')|list %}<div class="quick-empty">No matching Excel columns found for this choice.</div>{% endif %}
+        {% elif f.type == 'datetime' %}
+          <input class="wizard-input" type="datetime-local" name="wizard_{{ f.key }}" value="{{ row["values"][f.key].value if row else '' }}">
+        {% elif f.type == 'number' %}
+          <input class="wizard-input" type="number" step="any" name="wizard_{{ f.key }}" value="{{ row["values"][f.key].value if row else '' }}" placeholder="Enter {{ f.label }}">
+        {% else %}
+          <input class="wizard-input" name="wizard_{{ f.key }}" value="{{ row["values"][f.key].value if row else '' }}" placeholder="Enter {{ f.label }}">
+        {% endif %}
+      </div>
+    {% endfor %}
+    <div class="wizard-actions">
+      <button type="button" class="btn btn-secondary wizard-back">Back</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('{{ modal_id }}')">Cancel</button>
+        <button type="button" class="btn btn-primary wizard-next">Next</button>
+        <button type="submit" class="btn btn-primary wizard-save">Save</button>
+      </div>
+    </div>
+  </div>
+</form></div></div>
+{% endmacro %}
+
+{% if maintenance_wizard.ready %}
+{{ wizard_form('quickAddModal', '/equipment-maintenance/' ~ eq.id ~ '/quick-row/create', 'Add Maintenance — ' ~ eq.name) }}
+{% for r in maintenance_wizard.rows[-12:] %}
+{{ wizard_form('quickEdit' ~ r.row_index, '/equipment-maintenance/' ~ eq.id ~ '/quick-row/' ~ r.row_index ~ '/update', 'Edit Maintenance Entry Row ' ~ r.row_index, r) }}
+{% endfor %}
+{% endif %}
 
 <div class="card sheet-launch-card">
   <div class="card-header">
@@ -109,6 +243,34 @@
 {% block scripts %}
 <script src="/static/trs_realtime.js"></script>
 <script>
+
+function setupWizard(form){
+  const steps=[...form.querySelectorAll('.wizard-step')];
+  const back=form.querySelector('.wizard-back');
+  const next=form.querySelector('.wizard-next');
+  const save=form.querySelector('.wizard-save');
+  const bar=form.querySelector('.wizard-progress span');
+  let i=0;
+  function show(n){
+    i=Math.max(0,Math.min(n,steps.length-1));
+    steps.forEach((s,idx)=>s.classList.toggle('active',idx===i));
+    if(back) back.style.visibility=i===0?'hidden':'visible';
+    if(next) next.style.display=i===steps.length-1?'none':'inline-flex';
+    if(save) save.style.display=i===steps.length-1?'inline-flex':'none';
+    if(bar) bar.style.width=(((i+1)/Math.max(steps.length,1))*100)+'%';
+  }
+  if(back) back.onclick=()=>show(i-1);
+  if(next) next.onclick=()=>show(i+1);
+  show(0);
+}
+function openWizard(id){
+  openModal(id);
+  const el=document.getElementById(id);
+  const form=el?el.querySelector('.maintenance-wizard-form'):null;
+  if(form) setupWizard(form);
+}
+document.querySelectorAll('.maintenance-wizard-form').forEach(setupWizard);
+
 const EQUIPMENT_ID = {{ eq.id }};
 const statusEl = document.getElementById('sheetStatus');
 const timers = new Map();
