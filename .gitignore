@@ -1,0 +1,64 @@
+# JAM Platform — .gitignore
+
+# ── Python ─────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# ── Virtual Environments ───────────────────
+venv/
+env/
+.venv/
+.env/
+
+# ── Database ───────────────────────────────
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# ── Uploads & Reports ──────────────────────
+uploads/
+reports/
+*.pdf
+!templates/
+
+# ── Logs ───────────────────────────────────
+*.log
+logs/
+
+# ── IDE ────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ── Secrets ────────────────────────────────
+.env
+.env.local
+.env.production
+secrets.json
+
+# ── Render ─────────────────────────────────
+.render/
+
+# Google Drive OAuth backup secrets
+google_drive_credentials.json
+google_drive_token.json
+client_secret*.json
+local_backups/
+# TRS Google Drive backup runtime files
+token.json
+token*.json
+google_drive_token*
+google_drive_credentials*
+backups/

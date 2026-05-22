@@ -179,10 +179,21 @@ async def startup():
         except Exception as e:
             logger.warning(f"mkdir failed: {d} — {e}")
 
-    # On Render/free hosts the local disk may reset. Restore the latest SQLite backup
-    # from Cloudinary before initializing schema so Excel edits and activity log persist.
+    # IMPORTANT FOR RENDER:
+    # Restore cloud DB BEFORE init_db(). If restore is missing, do NOT upload the
+    # freshly seeded/empty database during startup, otherwise it overwrites the
+    # real backup after every deploy/restart. Backups are uploaded only after
+    # real write operations such as cell edit, maintenance add/edit/delete, PDF upload.
+    cloud_db_restored = False
+    local_db_existed_before_startup = False
     try:
-        restore_db_from_cloud(DB_PATH)
+        dbp = pathlib.Path(str(DB_PATH))
+        local_db_existed_before_startup = dbp.exists() and dbp.stat().st_size > 0
+    except Exception:
+        local_db_existed_before_startup = False
+
+    try:
+        cloud_db_restored = bool(restore_db_from_cloud(DB_PATH))
     except Exception as e:
         logger.warning(f"Cloud DB restore skipped: {e}")
 
@@ -208,10 +219,10 @@ async def startup():
 
     if cl_enabled():
         logger.info("Cloudinary connected - PDF storage active")
-        try:
-            backup_now(DB_PATH)
-        except Exception as e:
-            logger.warning(f"Initial cloud DB backup skipped: {e}")
+        if cloud_db_restored:
+            logger.info("Cloud DB persistence active - restored backup is in use")
+        else:
+            logger.warning("Cloud DB backup not restored on startup; startup backup upload is intentionally skipped to avoid overwriting saved data")
 
     # Optional Google Drive daily ZIP backup. Enable with TRS_GOOGLE_DRIVE_BACKUP=1
     try:
@@ -1061,9 +1072,13 @@ def _read_job_file_bytes(row: dict | None) -> bytes | None:
 def _persist_cloud_backup_now(reason: str = ""):
     """Best-effort immediate cloud DB backup after important operations."""
     try:
-        backup_now(DB_PATH)
+        ok = backup_now(DB_PATH)
+        if ok:
+            logger.info(f"TRS persistent backup completed{(' - ' + reason) if reason else ''}")
+        else:
+            logger.warning(f"TRS persistent backup not completed{(' - ' + reason) if reason else ''}")
     except Exception as e:
-        logger.debug(f"Immediate cloud backup skipped {reason}: {e}")
+        logger.warning(f"Immediate cloud backup failed {reason}: {e}")
 
 
 def excel_col_name(n: int) -> str:
