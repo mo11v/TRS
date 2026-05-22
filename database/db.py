@@ -193,6 +193,7 @@ CREATE TABLE IF NOT EXISTS trs_job_files (
     file_path       TEXT NOT NULL,
     file_type       TEXT,
     file_size       INTEGER DEFAULT 0,
+    file_blob       BLOB,
     notes           TEXT,
     detection_confidence INTEGER DEFAULT 0,
     detected_path   TEXT DEFAULT '',
@@ -507,6 +508,7 @@ def init_db():
     _ensure_col('trs_job_files', 'well_name', "well_name TEXT NOT NULL DEFAULT 'GENERAL'")
     _ensure_col('trs_job_files', 'job_name', "job_name TEXT DEFAULT ''")
     _ensure_col('trs_job_files', 'report_date', "report_date TEXT DEFAULT ''")
+    _ensure_col('trs_job_files', 'file_blob', 'file_blob BLOB')
     _ensure_col('trs_job_folders', 'job_month', "job_month TEXT NOT NULL DEFAULT ''")
     _ensure_col('trs_job_folders', 'well_name', "well_name TEXT NOT NULL DEFAULT 'GENERAL'")
     _ensure_col('trs_equipment', 'source_file_path', 'source_file_path TEXT DEFAULT \'\'')

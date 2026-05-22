@@ -14,7 +14,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 BACKUP_PUBLIC_ID = os.getenv("TRS_DB_BACKUP_PUBLIC_ID", "trs_persistence/trs_platform_db")
-BACKUP_MIN_INTERVAL = int(os.getenv("TRS_DB_BACKUP_MIN_INTERVAL", "15"))
+BACKUP_MIN_INTERVAL = int(os.getenv("TRS_DB_BACKUP_MIN_INTERVAL", "3"))
 _enabled_cache = None
 _timer = None
 _lock = threading.Lock()
@@ -115,8 +115,12 @@ def _backup_now(db_path):
         return False
 
 
-def request_db_backup(db_path, delay: int = 3):
-    """Debounced background backup after DB write operations."""
+def request_db_backup(db_path, delay: int = 1):
+    """Debounced background backup after DB write operations.
+
+    Render free storage is ephemeral, so keep the cloud copy very fresh.
+    The timer is short but debounced to avoid uploading for every cell edit.
+    """
     global _timer
     if not enabled():
         return

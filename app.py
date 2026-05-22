@@ -1019,6 +1019,53 @@ def detect_job_file_path(filename: str, content: bytes | None = None) -> dict:
     }
 
 
+def _is_unknown_value(value: str, kind: str = "") -> bool:
+    v = (value or "").strip().upper()
+    if not v:
+        return True
+    return v.startswith("UNKNOWN") or v in {"GENERAL", "ENTER COMPANY", "N/A", "NA", "-", "—"}
+
+
+def _pick_detected_or_manual(manual: str, detected: str, kind: str = "") -> str:
+    """Use the PDF detector first when it found a real value.
+
+    This prevents stale form values from a previous upload putting different PDFs
+    into the same company/year/rig/connection folder.
+    """
+    d = (detected or "").strip()
+    m = (manual or "").strip()
+    if d and not _is_unknown_value(d, kind):
+        return d
+    return m or d
+
+
+def _read_job_file_bytes(row: dict | None) -> bytes | None:
+    """Return stored job-file bytes from disk, or DB blob if Render local disk reset."""
+    if not row:
+        return None
+    path = row.get("file_path") or ""
+    try:
+        if path and os.path.exists(path):
+            return Path(path).read_bytes()
+    except Exception:
+        pass
+    blob = row.get("file_blob")
+    if blob:
+        try:
+            return bytes(blob)
+        except Exception:
+            return blob
+    return None
+
+
+def _persist_cloud_backup_now(reason: str = ""):
+    """Best-effort immediate cloud DB backup after important operations."""
+    try:
+        backup_now(DB_PATH)
+    except Exception as e:
+        logger.debug(f"Immediate cloud backup skipped {reason}: {e}")
+
+
 def excel_col_name(n: int) -> str:
     name = ""
     while n > 0:
@@ -1534,15 +1581,16 @@ async def job_files_import_zip(request: Request, file: UploadFile = File(...)):
             with open(path, "wb") as out:
                 out.write(data)
             fid = qx("""
-                INSERT INTO trs_job_files (company, job_year, job_month, rig, connection_name, well_name, job_name, report_date, original_name, stored_name, file_path, file_type, file_size, notes, detection_confidence, detected_path, uploaded_by)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-            """, (company, job_year, job_month, rig, connection_name, well_name, detected.get("job_name") or "", detected.get("report_date") or "", original, stored, path, ext, len(data), f"Batch imported from {file.filename}", detected["confidence"], detected.get("detected_path") or f"{company}/{job_year}/{job_month}/{rig}/{connection_name}", user["id"]))
+                INSERT INTO trs_job_files (company, job_year, job_month, rig, connection_name, well_name, job_name, report_date, original_name, stored_name, file_path, file_type, file_size, file_blob, notes, detection_confidence, detected_path, uploaded_by)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """, (company, job_year, job_month, rig, connection_name, well_name, detected.get("job_name") or "", detected.get("report_date") or "", original, stored, path, ext, len(data), data, f"Batch imported from {file.filename}", detected["confidence"], detected.get("detected_path") or f"{company}/{job_year}/{job_month}/{rig}/{connection_name}", user["id"]))
             qx("""INSERT OR IGNORE INTO trs_job_folders (company, job_year, job_month, rig, connection_name, well_name, notes, created_by) VALUES (?,?,?,?,?,?,?,?)""", (company, job_year, job_month, rig, connection_name, well_name, "Auto-created by ZIP import", user["id"]))
             imported += 1
             if detected.get("needs_review"):
                 review += 1
     log_activity("job_zip_import", user["id"], "trs_job_file", None, f"Imported {imported} job files from {file.filename}; {review} need review; {skipped} skipped")
     await ws_manager.broadcast({"type":"job_zip_import", "imported": imported, "review": review, "skipped": skipped}, "job_files")
+    _persist_cloud_backup_now("job_zip_import")
     return RedirectResponse("/job-files", status_code=303)
 
 
@@ -1565,12 +1613,14 @@ async def job_files_upload(request: Request,
     original = file.filename or "upload.bin"
     content = await file.read()
     detected = detect_job_file_path(original, content)
-    if not (company and job_year and job_month and rig and connection_name):
-        company = company or detected["company"]
-        job_year = job_year or detected["job_year"]
-        job_month = job_month or detected.get("job_month") or datetime.now().strftime("%m-%B")
-        rig = rig or detected["rig"]
-        connection_name = connection_name or detected["connection_name"]
+    # Always prefer fresh PDF detection over stale form values when the detector found a real value.
+    # This fixes different uploaded PDFs being filed under the previous file's company/rig/connection.
+    company = _pick_detected_or_manual(company, detected.get("company"), "company")
+    job_year = _pick_detected_or_manual(job_year, detected.get("job_year"), "year")
+    job_month = _pick_detected_or_manual(job_month, detected.get("job_month") or datetime.now().strftime("%m-%B"), "month")
+    rig = _pick_detected_or_manual(rig, detected.get("rig"), "rig")
+    connection_name = _pick_detected_or_manual(connection_name, detected.get("connection_name"), "connection")
+
     company = (company or "UNKNOWN COMPANY").strip()
     job_year = (job_year or str(datetime.now().year)).strip()
     job_month = (job_month or datetime.now().strftime("%m-%B")).strip()
@@ -1587,11 +1637,12 @@ async def job_files_upload(request: Request,
 
     detected_path = detected.get("detected_path") or f"{company}/{job_year}/{job_month}/{rig}/{connection_name}"
     fid = qx("""
-        INSERT INTO trs_job_files (company, job_year, job_month, rig, connection_name, well_name, job_name, report_date, original_name, stored_name, file_path, file_type, file_size, notes, detection_confidence, detected_path, confirmed_by, confirmed_at, uploaded_by)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-    """, (company.strip(), job_year.strip(), job_month.strip(), rig.strip(), connection_name.strip(), (well_name or "GENERAL").strip(), detected.get("job_name") or "", detected.get("report_date") or "", original, stored, path, file_ext(original), len(content), notes.strip(), int(detected.get("confidence") or 0), detected_path, user["id"], datetime.now().isoformat(timespec="seconds"), user["id"]))
+        INSERT INTO trs_job_files (company, job_year, job_month, rig, connection_name, well_name, job_name, report_date, original_name, stored_name, file_path, file_type, file_size, file_blob, notes, detection_confidence, detected_path, confirmed_by, confirmed_at, uploaded_by)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    """, (company.strip(), job_year.strip(), job_month.strip(), rig.strip(), connection_name.strip(), (well_name or "GENERAL").strip(), detected.get("job_name") or "", detected.get("report_date") or "", original, stored, path, file_ext(original), len(content), content, notes.strip(), int(detected.get("confidence") or 0), detected_path, user["id"], datetime.now().isoformat(timespec="seconds"), user["id"]))
     log_activity("job_file_upload", user["id"], "trs_job_file", fid, f"Uploaded {original} to {company}/{job_year}/{job_month}/{rig}/{connection_name}")
     await ws_manager.broadcast({"type":"job_file_upload", "file_id": fid, "path": f"{company}/{job_year}/{job_month}/{rig}/{connection_name}"}, "job_files")
+    _persist_cloud_backup_now("job_file_upload")
     return RedirectResponse(f"/job-files?company={company}&job_year={job_year}&job_month={job_month}&rig={rig}&connection_name={connection_name}", status_code=303)
 
 
@@ -1642,9 +1693,12 @@ async def job_files_download(request: Request, file_id: int):
     user, redir = require_user(request)
     if redir: return redir
     f = q1("SELECT * FROM trs_job_files WHERE id=?", (file_id,))
-    if not f or not os.path.exists(f["file_path"]):
+    data = _read_job_file_bytes(f)
+    if not f or data is None:
         return JSONResponse({"error":"File not found"}, status_code=404)
-    return FileResponse(f["file_path"], filename=f["original_name"])
+    if f.get("file_path") and os.path.exists(f["file_path"]):
+        return FileResponse(f["file_path"], filename=f["original_name"])
+    return Response(content=data, media_type="application/octet-stream", headers={"Content-Disposition": "attachment; filename=\"{}\"".format(f["original_name"])})
 
 
 @app.get("/job-files/{file_id}/preview")
@@ -1652,10 +1706,13 @@ async def job_files_preview(request: Request, file_id: int):
     user, redir = require_user(request)
     if redir: return redir
     f = q1("SELECT * FROM trs_job_files WHERE id=?", (file_id,))
-    if not f or not os.path.exists(f["file_path"]):
+    data = _read_job_file_bytes(f)
+    if not f or data is None:
         return JSONResponse({"error":"File not found"}, status_code=404)
-    media_type = "application/pdf" if f.get("file_type") == "pdf" else None
-    return FileResponse(f["file_path"], media_type=media_type, filename=f["original_name"])
+    media_type = "application/pdf" if f.get("file_type") == "pdf" else "application/octet-stream"
+    if f.get("file_path") and os.path.exists(f["file_path"]):
+        return FileResponse(f["file_path"], media_type=media_type, filename=f["original_name"])
+    return Response(content=data, media_type=media_type, headers={"Content-Disposition": "inline; filename=\"{}\"".format(f["original_name"])})
 
 
 @app.post("/job-files/{file_id}/delete")
@@ -1845,6 +1902,7 @@ async def equipment_import_folder(request: Request,
                 imported += 1
     log_activity("equipment_import", user["id"], "trs_equipment", None, f"Imported {imported} equipment from {file.filename}")
     await ws_manager.broadcast({"type":"equipment_import", "imported": imported, "skipped": skipped}, "equipment")
+    _persist_cloud_backup_now("equipment_import")
     return RedirectResponse(f"/equipment-maintenance?q={category}", status_code=303)
 
 
@@ -1866,6 +1924,7 @@ async def equipment_delete(request: Request, equipment_id: int):
         qx("DELETE FROM trs_equipment WHERE id=?", (equipment_id,))
         log_activity("equipment_delete", user["id"], "trs_equipment", equipment_id, f"Deleted equipment {eq.get('name') or equipment_id}")
         await ws_manager.broadcast({"type":"equipment_delete", "equipment_id": equipment_id}, "equipment")
+        _persist_cloud_backup_now("equipment_delete")
     return RedirectResponse("/equipment-maintenance", status_code=303)
 
 
@@ -1897,6 +1956,7 @@ async def equipment_quick_row_create(request: Request, equipment_id: int):
        (equipment_id, equipment_id, max(new_row, int(quick.get("next_row") or new_row)), max_col, user["id"]))
     log_activity("equipment_quick_row_create", user["id"], "trs_equipment", equipment_id, f"Added simple entry row {new_row}")
     await ws_manager.broadcast({"type":"equipment_sheet_row_add", "equipment_id": equipment_id, "by": user.get("full_name") or user.get("username")}, "equipment")
+    _persist_cloud_backup_now("equipment_row_create")
     return RedirectResponse(f"/equipment-maintenance/{equipment_id}?saved=1", status_code=303)
 
 
@@ -1917,6 +1977,7 @@ async def equipment_quick_row_update(request: Request, equipment_id: int, row_in
             upsert_equipment_sheet_cell(equipment_id, row_index, col, str(form.get(f"col_{col}") or ""), user["id"])
     log_activity("equipment_quick_row_update", user["id"], "trs_equipment", equipment_id, f"Updated simple entry row {row_index}")
     await ws_manager.broadcast({"type":"equipment_sheet_update", "equipment_id": equipment_id, "by": user.get("full_name") or user.get("username")}, "equipment")
+    _persist_cloud_backup_now("equipment_row_update")
     return RedirectResponse(f"/equipment-maintenance/{equipment_id}?updated=1", status_code=303)
 
 
@@ -1942,6 +2003,7 @@ async def equipment_quick_row_delete(request: Request, equipment_id: int, row_in
         qx("DELETE FROM trs_equipment_sheet_cells WHERE equipment_id=? AND row_index=?", (equipment_id, row_index))
     log_activity("equipment_quick_row_delete", user["id"], "trs_equipment", equipment_id, f"Deleted simple entry row {row_index}")
     await ws_manager.broadcast({"type":"equipment_sheet_update", "equipment_id": equipment_id, "by": user.get("full_name") or user.get("username")}, "equipment")
+    _persist_cloud_backup_now("equipment_row_delete")
     return RedirectResponse(f"/equipment-maintenance/{equipment_id}?deleted=1", status_code=303)
 
 
@@ -1980,6 +2042,7 @@ async def equipment_sheet_cell_update(request: Request, equipment_id: int):
     source_ok, source_msg = write_equipment_cell_to_source(equipment_id, row, col, value)
     log_activity("sheet_cell_update", user["id"], "trs_equipment", equipment_id, f"Cell {excel_col_name(col)}{row} updated" + (" and saved to original Excel" if source_ok else ""))
     await ws_manager.broadcast({"type":"equipment_sheet_update", "equipment_id": equipment_id, "row": row, "col": col, "value": value, "by": user.get("full_name") or user.get("username")}, "equipment")
+    _persist_cloud_backup_now("equipment_cell_update")
     return JSONResponse({"ok": True, "source_saved": source_ok, "source_message": source_msg})
 
 
@@ -1994,6 +2057,7 @@ async def equipment_sheet_add_row(request: Request, equipment_id: int):
        (equipment_id, equipment_id, new_row, max_col, user["id"]))
     log_activity("sheet_row_add", user["id"], "trs_equipment", equipment_id, f"Added spreadsheet row {new_row}")
     await ws_manager.broadcast({"type":"equipment_sheet_row_add", "equipment_id": equipment_id}, "equipment")
+    _persist_cloud_backup_now("equipment_sheet_add_row")
     return JSONResponse({"ok": True, "row": new_row})
 
 

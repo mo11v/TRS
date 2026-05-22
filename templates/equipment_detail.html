@@ -3,7 +3,6 @@
 {% block page_title %}🛠️ {{ eq.name }}{% endblock %}
 {% block topbar_actions %}
 {% if eq.source_file_path %}<a class="btn btn-secondary btn-sm" href="/equipment-maintenance/{{ eq.id }}/source">⬇ Original XLSX</a>{% endif %}
-<a class="btn btn-secondary btn-sm" href="/equipment-maintenance/{{ eq.id }}/sheet/export.xlsx">⬇ Live Excel</a>
 <a class="btn btn-secondary btn-sm" href="/equipment-maintenance">← Equipment</a>
 <button class="btn btn-primary btn-sm" onclick="openModal('logModal')">➕ Add Log</button>
 {% if user_role in ['Admin','Manager'] %}<form method="post" action="/equipment-maintenance/{{ eq.id }}/delete" style="display:inline" onsubmit="return confirm('Delete this equipment and all logs?')"><button class="btn btn-red btn-sm" type="submit">Delete</button></form>{% endif %}
@@ -187,7 +186,6 @@
     <div class="topbar-actions">
       {% if eq.source_file_path %}<a class="btn btn-secondary btn-sm" href="/equipment-maintenance/{{ eq.id }}/source">⬇ Original XLSX</a>{% endif %}
       <button class="btn btn-primary btn-sm" type="button" onclick="openModal('sheetModal')">▣ Live Sync</button>
-      <a class="btn btn-secondary btn-sm" href="/equipment-maintenance/{{ eq.id }}/sheet/export.xlsx">Export Data XLSX</a>
     </div>
   </div>
   <div class="source-note">Tip: لو الشيت كبير، افتحه من زر <b>Live Sync</b> وسيظهر في نافذة واسعة منفصلة للتعديل.</div>
