@@ -13,7 +13,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-BACKUP_PUBLIC_ID = os.getenv("TRS_DB_BACKUP_PUBLIC_ID", "trs_persistence/trs_platform_db")
+BACKUP_PUBLIC_ID = os.getenv("TRS_DB_BACKUP_PUBLIC_ID", "trs_persistence/trs_platform_db.db")
 BACKUP_MIN_INTERVAL = int(os.getenv("TRS_DB_BACKUP_MIN_INTERVAL", "3"))
 _enabled_cache = None
 _timer = None
@@ -54,7 +54,7 @@ def restore_db_from_cloud(db_path) -> bool:
     if not cl:
         return False
     try:
-        result = cl.api.resource(BACKUP_PUBLIC_ID, resource_type="raw")
+        result = cl.api.resource(BACKUP_PUBLIC_ID, resource_type="raw", type="upload")
         url = result.get("secure_url")
         if not url:
             return False
@@ -102,6 +102,7 @@ def _backup_now(db_path):
         cl.uploader.upload(
             str(db_path),
             public_id=BACKUP_PUBLIC_ID,
+            format="db",
             resource_type="raw",
             overwrite=True,
             invalidate=True,
